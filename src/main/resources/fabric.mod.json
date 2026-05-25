@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "crowbar",
+  "version": "${version}",
+  "name": "CrowBar",
+  "description": "Client locator bar name tags, skin markers, and self-view rendering.",
+  "authors": [
+    "castledking"
+  ],
+  "license": "All Rights Reserved",
+  "contact": {
+    "homepage": "https://castled.codes",
+    "issues": "https://github.com/castledking/CrowBar/issues",
+    "sources": "https://github.com/castledking/CrowBar"
+  },
+  "icon": "assets/crowbar/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "codes.castled.locatornametags.LocatorNameTagsClient"
+    ],
+    "modmenu": [
+      "codes.castled.locatornametags.compat.CrowBarModMenuIntegration"
+    ]
+  },
+  "mixins": [
+    {
+      "config": "crowbar.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": ">=${fabric_api_version}",
+    "minecraft": "=${minecraft_version}",
+    "java": ">=21"
+  },
+  "suggests": {
+    "modmenu": "*"
+  }
+}
