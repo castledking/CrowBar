@@ -7,7 +7,7 @@
   "authors": [
     "castledking"
   ],
-  "license": "All Rights Reserved",
+  "license": "GNU Lesser General Public License v3.0",
   "contact": {
     "homepage": "https://castled.codes",
     "issues": "https://github.com/castledking/CrowBar/issues",
@@ -17,10 +17,10 @@
   "environment": "client",
   "entrypoints": {
     "client": [
-      "codes.castled.locatornametags.LocatorNameTagsClient"
+      "codes.castled.crowbar.CrowBarClient"
     ],
     "modmenu": [
-      "codes.castled.locatornametags.compat.CrowBarModMenuIntegration"
+      "codes.castled.crowbar.compat.CrowBarModMenuIntegration"
     ]
   },
   "mixins": [

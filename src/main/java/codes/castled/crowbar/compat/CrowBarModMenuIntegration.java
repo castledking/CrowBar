@@ -1,6 +1,6 @@
-package codes.castled.locatornametags.compat;
+package codes.castled.crowbar.compat;
 
-import codes.castled.locatornametags.CrowBarConfigScreen;
+import codes.castled.crowbar.CrowBarConfigScreen;
 import com.terraformersmc.modmenu.api.ConfigScreenFactory;
 import com.terraformersmc.modmenu.api.ModMenuApi;
 

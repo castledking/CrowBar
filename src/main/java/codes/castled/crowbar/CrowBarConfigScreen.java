@@ -1,4 +1,4 @@
-package codes.castled.locatornametags;
+package codes.castled.crowbar;
 
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -22,40 +22,66 @@ public final class CrowBarConfigScreen extends Screen {
 
         addDrawableChild(toggleButton(
                 "crowbar.config.nametags",
-                LocatorNameTagsState.nameTagsEnabled,
+                CrowBarState.nameTagsEnabled,
                 x,
                 y,
                 buttonWidth,
                 buttonHeight,
                 button -> {
-                    LocatorNameTagsState.nameTagsEnabled = !LocatorNameTagsState.nameTagsEnabled;
-                    button.setMessage(toggleText("crowbar.config.nametags", LocatorNameTagsState.nameTagsEnabled));
+                    CrowBarState.nameTagsEnabled = !CrowBarState.nameTagsEnabled;
+                    button.setMessage(toggleText("crowbar.config.nametags", CrowBarState.nameTagsEnabled));
                 }
         ));
 
         addDrawableChild(toggleButton(
                 "crowbar.config.skins",
-                LocatorNameTagsState.skinsEnabled,
+                CrowBarState.skinsEnabled,
                 x,
                 y + 26,
                 buttonWidth,
                 buttonHeight,
                 button -> {
-                    LocatorNameTagsState.skinsEnabled = !LocatorNameTagsState.skinsEnabled;
-                    button.setMessage(toggleText("crowbar.config.skins", LocatorNameTagsState.skinsEnabled));
+                    CrowBarState.skinsEnabled = !CrowBarState.skinsEnabled;
+                    button.setMessage(toggleText("crowbar.config.skins", CrowBarState.skinsEnabled));
                 }
         ));
 
         addDrawableChild(toggleButton(
                 "crowbar.config.view_self",
-                LocatorNameTagsState.viewSelfEnabled,
+                CrowBarState.viewSelfEnabled,
                 x,
                 y + 52,
                 buttonWidth,
                 buttonHeight,
                 button -> {
-                    LocatorNameTagsState.viewSelfEnabled = !LocatorNameTagsState.viewSelfEnabled;
-                    button.setMessage(toggleText("crowbar.config.view_self", LocatorNameTagsState.viewSelfEnabled));
+                    CrowBarState.viewSelfEnabled = !CrowBarState.viewSelfEnabled;
+                    button.setMessage(toggleText("crowbar.config.view_self", CrowBarState.viewSelfEnabled));
+                }
+        ));
+
+        addDrawableChild(toggleButton(
+                "crowbar.config.force_show_all",
+                CrowBarState.forceShowAll,
+                x,
+                y + 78,
+                buttonWidth,
+                buttonHeight,
+                button -> {
+                    CrowBarState.forceShowAll = !CrowBarState.forceShowAll;
+                    button.setMessage(toggleText("crowbar.config.force_show_all", CrowBarState.forceShowAll));
+                }
+        ));
+
+        addDrawableChild(toggleButton(
+                "crowbar.config.show_distance",
+                CrowBarState.showDistance,
+                x,
+                y + 104,
+                buttonWidth,
+                buttonHeight,
+                button -> {
+                    CrowBarState.showDistance = !CrowBarState.showDistance;
+                    button.setMessage(toggleText("crowbar.config.show_distance", CrowBarState.showDistance));
                 }
         ));
     }
