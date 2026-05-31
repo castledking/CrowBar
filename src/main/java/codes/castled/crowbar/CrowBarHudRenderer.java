@@ -15,10 +15,11 @@ import net.minecraft.scoreboard.Team;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.world.World;
-import net.minecraft.world.waypoint.EntityTickProgress;
 import net.minecraft.client.gl.RenderPipelines;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 
 public final class CrowBarHudRenderer {
@@ -51,98 +52,112 @@ public final class CrowBarHudRenderer {
     }
 
     public static void renderAlliumRestoredPlayers(DrawContext context, RenderTickCounter tickCounter) {
-        // Skip Allium rendering when self-view is active (it draws its own bar)
         if (CrowBarState.viewSelfEnabled) return;
-        
+
         MinecraftClient client = MinecraftClient.getInstance();
-        
-        // Guard conditions
         if (client.player == null || client.world == null) return;
-        
+
         Entity cameraEntity = client.getCameraEntity();
         if (cameraEntity == null) return;
-        
-        // Don't draw bar if there are no genuine players to show
+
         if (!CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid())) return;
-        
-        World world = cameraEntity.getEntityWorld();
+
         Camera camera = client.gameRenderer.getCamera();
-        EntityTickProgress tickProgress = entity ->
-                tickCounter.getTickProgress(!world.getTickManager().shouldSkipTick(entity));
         TextRenderer textRenderer = client.textRenderer;
         int screenWidth = context.getScaledWindowWidth();
         int screenHeight = context.getScaledWindowHeight();
         int locatorBarY = screenHeight - 29;
-        
-        // Draw locator bar background
-        int barX = (screenWidth - 182) / 2;
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
-        
-        // Render Allium-restored players
+        int centerX = screenWidth / 2;
+
+        // First pass: collect all renderable entries with computed positions
+        List<EntryRenderData> entries = new ArrayList<>();
         for (AlliumPlayerData alliumData : CrowBarState.alliumPlayerData.values()) {
             if (alliumData.isExpired()) continue;
-            
             UUID uuid = alliumData.uuid;
             if (uuid.equals(cameraEntity.getUuid())) continue;
-            
-            // Calculate position
+
             double deltaX = alliumData.x - cameraEntity.getX();
             double deltaZ = alliumData.z - cameraEntity.getZ();
             double yaw = Math.toDegrees(Math.atan2(deltaZ, deltaX)) - 90.0;
             yaw = (yaw + 360.0) % 360.0;
-            
-            // Convert to relative yaw (-60 to 60 range)
+
             double relativeYaw = yaw - camera.getYaw();
             while (relativeYaw < -180) relativeYaw += 360;
             while (relativeYaw > 180) relativeYaw -= 360;
-            
+
             if (relativeYaw <= -61.0D || relativeYaw > 60.0D) continue;
-            
+
             int baseX = MathHelper.ceil((screenWidth - 9.0F) / 2.0F);
             int markerX = baseX + MathHelper.floor(relativeYaw * 173.0D / 2.0D / 60.0D);
             int markerY = locatorBarY - 2;
-            
+
             double distance = Math.sqrt(deltaX * deltaX + (alliumData.y - cameraEntity.getY()) * (alliumData.y - cameraEntity.getY()) + deltaZ * deltaZ);
-            
-            // Calculate scaled size
+
             int sizeHundredths = calculateSizeFromDistance((float) distance, 9);
             int size = sizeHundredths / 100;
             int dotCenterX = markerX + 4;
             int dotCenterY = markerY + 4;
-            
-            // Always draw tinted locator dot
-            int dotColor = getDotColor(uuid);
-            drawTintedLocatorDot(context, dotCenterX, dotCenterY, size, dotColor);
-            
-            // Optionally draw skin on top
-            if (CrowBarState.skinsEnabled) {
-                SkinTextures skin = getSkin(uuid);
-                if (skin != null) {
-                    PlayerSkinDrawer.draw(context, skin, dotCenterX - size / 2, dotCenterY - size / 2, size);
-                }
-            }
-            
-            // Draw name tag and/or distance text
-            if (CrowBarState.nameTagsEnabled || CrowBarState.showDistance) {
-                String text = "";
-                if (CrowBarState.nameTagsEnabled) {
-                    text = getName(uuid);
-                }
-                if (CrowBarState.showDistance && distance > 0) {
-                    String distanceText = String.format("%.0fm", distance);
-                    if (CrowBarState.nameTagsEnabled) {
-                        text = text + " " + distanceText;
-                    } else {
-                        text = distanceText;
-                    }
-                }
-                
-                int textWidth = textRenderer.getWidth(text);
-                int textX = dotCenterX - textWidth / 2;
-                int textY = dotCenterY - size / 2 - 12;
-                context.drawTextWithShadow(textRenderer, text, textX, textY, 0xFFFFFFFF);
+
+            entries.add(new EntryRenderData(uuid, markerX, dotCenterX, dotCenterY, size, distance));
+        }
+
+        if (entries.isEmpty()) return;
+
+        // Draw background
+        int barX = (screenWidth - 182) / 2;
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
+
+        // Find the entry closest to screen center
+        EntryRenderData closest = entries.stream()
+                .min(Comparator.comparingInt(e -> Math.abs(e.markerX - centerX)))
+                .orElse(null);
+
+        // Draw non-closest entries first with faded text
+        for (EntryRenderData entry : entries) {
+            if (entry == closest) continue;
+            renderAlliumEntry(context, textRenderer, entry, false);
+        }
+
+        // Draw closest entry last with full opacity text
+        if (closest != null) {
+            renderAlliumEntry(context, textRenderer, closest, true);
+        }
+    }
+
+    private static void renderAlliumEntry(DrawContext context, TextRenderer textRenderer, EntryRenderData entry, boolean isClosest) {
+        int dotColor = getDotColor(entry.uuid);
+        drawTintedLocatorDot(context, entry.dotCenterX, entry.dotCenterY, entry.size, dotColor);
+
+        if (CrowBarState.skinsEnabled) {
+            SkinTextures skin = getSkin(entry.uuid);
+            if (skin != null) {
+                PlayerSkinDrawer.draw(context, skin, entry.dotCenterX - entry.size / 2, entry.dotCenterY - entry.size / 2, entry.size);
             }
         }
+
+        if (CrowBarState.nameTagsEnabled || CrowBarState.showDistance) {
+            String text = "";
+            if (CrowBarState.nameTagsEnabled) {
+                text = getName(entry.uuid);
+            }
+            if (CrowBarState.showDistance && entry.distance > 0) {
+                String distanceText = String.format("%.0fm", entry.distance);
+                if (CrowBarState.nameTagsEnabled) {
+                    text = text + " " + distanceText;
+                } else {
+                    text = distanceText;
+                }
+            }
+
+            int textColor = isClosest ? 0xFFFFFFFF : 0x70FFFFFF;
+            int textWidth = textRenderer.getWidth(text);
+            int textX = entry.dotCenterX - textWidth / 2;
+            int textY = entry.dotCenterY - entry.size / 2 - 12;
+            context.drawTextWithShadow(textRenderer, text, textX, textY, textColor);
+        }
+    }
+
+    private record EntryRenderData(UUID uuid, int markerX, int dotCenterX, int dotCenterY, int size, double distance) {
     }
 
     private static void drawTintedLocatorDot(DrawContext context, int centerX, int centerY, int size, int color) {
