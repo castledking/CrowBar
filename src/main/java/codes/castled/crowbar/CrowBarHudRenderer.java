@@ -28,25 +28,9 @@ public final class CrowBarHudRenderer {
     private static final Identifier LOCATOR_BAR_BACKGROUND = Identifier.of("crowbar", "hud/locator_bar_background");
     private static final Identifier LOCATOR_DOT_SPRITE = Identifier.of("crowbar", "hud/locator_bar_dot/default_0");
     
-    // Mojang-style color palette for fallback colors
-    private static final int[] MOJANGISH_DOT_COLORS = {
-        0x000000, // black
-        0x0000AA, // dark_blue
-        0x00AA00, // dark_green
-        0x00AAAA, // dark_aqua
-        0xAA0000, // dark_red
-        0xAA00AA, // dark_purple
-        0xFFAA00, // gold
-        0xAAAAAA, // gray
-        0x555555, // dark_gray
-        0x5555FF, // blue
-        0x55FF55, // green
-        0x55FFFF, // aqua
-        0xFF5555, // red
-        0xFF55FF, // light_purple
-        0xFFFF55, // yellow
-        0xFFFFFF  // white
-    };
+    // Golden angle (≈137.508°) — matches Allium server's fallback color generator.
+    // Ensures a player gets the same hue from both server and client fallback paths.
+    private static final float GOLDEN_ANGLE = 137.508f;
 
     private CrowBarHudRenderer() {
     }
@@ -200,9 +184,12 @@ public final class CrowBarHudRenderer {
     }
     
     private static int getMojangishGeneratedColor(UUID uuid) {
-        int hash = uuid.hashCode();
-        int index = Math.floorMod(hash, MOJANGISH_DOT_COLORS.length);
-        return 0xFF000000 | MOJANGISH_DOT_COLORS[index];
+        long hash = uuid.hashCode() & 0xffffffffL;
+        float hue = (hash * GOLDEN_ANGLE) % 360f;
+        float saturation = 0.75f + ((hash >> 8) & 0xFF) / 255f * 0.20f;
+        float brightness = 0.85f + ((hash >> 16) & 0xFF) / 255f * 0.15f;
+        int rgb = java.awt.Color.HSBtoRGB(hue / 360f, saturation, brightness) & 0xFFFFFF;
+        return 0xFF000000 | rgb;
     }
 
     private static int getTeamColor(PlayerEntity player) {
