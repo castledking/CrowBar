@@ -1,4 +1,11 @@
-# CrowBar
+[![CrowBar](https://castled.codes/assets/crowbar-banner.png)](https://github.com/castledking/CrowBar)
+
+<p align="center">
+  <a href="https://discord.com/invite/pCKdCX6nYr"><img alt="Discord" src="https://img.shields.io/badge/Discord-Community-5865F2?style=for-the-badge&logo=discord&logoColor=white"></a>
+  <a href="https://github.com/castledking/CrowBar/issues"><img alt="GitHub Issues" src="https://img.shields.io/badge/GitHub-Issues-181717?style=for-the-badge&logo=github"></a>
+  <a href="https://github.com/castledking/CrowBar/wiki"><img alt="Wiki" src="https://img.shields.io/badge/GitHub-Wiki-181717?style=for-the-badge&logo=github"></a>
+  <a href="https://castled.codes"><img alt="CASTLED CODEX" src="https://castled.codes/assets/logo-banner.png" width="140" height="35"></a>
+</p>
 
 CrowBar is a Fabric client mod for Minecraft 1.21.11 that extends the vanilla locator bar with readable player name tags, skin markers, and a self-view capture mode.
 
