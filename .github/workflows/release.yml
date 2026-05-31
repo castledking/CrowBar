@@ -55,7 +55,7 @@ jobs:
           fi
 
           MC_VERSION="$(grep '^minecraft_version=' gradle.properties | cut -d= -f2)"
-          NOTES="release/latest/v${VERSION}.md"
+          NOTES=".release/latest/v${VERSION}.md"
           JAR="CrowBar-${MC_VERSION}-${VERSION}.jar"
           SOURCES_JAR="CrowBar-${MC_VERSION}-${VERSION}-sources.jar"
 
