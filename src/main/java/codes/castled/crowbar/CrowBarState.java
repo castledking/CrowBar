@@ -53,6 +53,19 @@ public final class CrowBarState {
         return Optional.empty();
     }
 
+    /**
+     * Check if there are any Allium entries worth rendering (non-expired, not self).
+     */
+    public static boolean hasRenderableAlliumEntries(UUID selfUuid) {
+        if (selfUuid == null) return false;
+        for (AlliumPlayerData data : alliumPlayerData.values()) {
+            if (data.isExpired()) continue;
+            if (data.uuid.equals(selfUuid)) continue;
+            return true;
+        }
+        return false;
+    }
+
     private CrowBarState() {
     }
 }

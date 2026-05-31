@@ -24,21 +24,46 @@ import java.util.UUID;
 public final class CrowBarHudRenderer {
     private static final Identifier EXPERIENCE_BACKGROUND = Identifier.ofVanilla("hud/experience_bar_background");
     private static final Identifier EXPERIENCE_PROGRESS = Identifier.ofVanilla("hud/experience_bar_progress");
-    private static final Identifier LOCATOR_BAR_BACKGROUND = Identifier.ofVanilla("hud/experience_bar_background");
+    private static final Identifier LOCATOR_BAR_BACKGROUND = Identifier.of("crowbar", "hud/locator_bar_background");
+    private static final Identifier LOCATOR_DOT_SPRITE = Identifier.of("crowbar", "hud/locator_bar_dot/default_0");
+    
+    // Mojang-style color palette for fallback colors
+    private static final int[] MOJANGISH_DOT_COLORS = {
+        0x000000, // black
+        0x0000AA, // dark_blue
+        0x00AA00, // dark_green
+        0x00AAAA, // dark_aqua
+        0xAA0000, // dark_red
+        0xAA00AA, // dark_purple
+        0xFFAA00, // gold
+        0xAAAAAA, // gray
+        0x555555, // dark_gray
+        0x5555FF, // blue
+        0x55FF55, // green
+        0x55FFFF, // aqua
+        0xFF5555, // red
+        0xFF55FF, // light_purple
+        0xFFFF55, // yellow
+        0xFFFFFF  // white
+    };
 
     private CrowBarHudRenderer() {
     }
 
     public static void renderAlliumRestoredPlayers(DrawContext context, RenderTickCounter tickCounter) {
+        // Skip Allium rendering when self-view is active (it draws its own bar)
+        if (CrowBarState.viewSelfEnabled) return;
+        
         MinecraftClient client = MinecraftClient.getInstance();
         
         // Guard conditions
         if (client.player == null || client.world == null) return;
-        if (!CrowBarState.forceShowAll) return;
-        if (CrowBarState.alliumPlayerData.isEmpty()) return;
         
         Entity cameraEntity = client.getCameraEntity();
         if (cameraEntity == null) return;
+        
+        // Don't draw bar if there are no genuine players to show
+        if (!CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid())) return;
         
         World world = cameraEntity.getEntityWorld();
         Camera camera = client.gameRenderer.getCamera();
@@ -49,40 +74,16 @@ public final class CrowBarHudRenderer {
         int screenHeight = context.getScaledWindowHeight();
         int locatorBarY = screenHeight - 29;
         
-        // Count hidden players to determine if we should draw the background
-        int hiddenPlayerCount = 0;
-        for (AlliumPlayerData alliumData : CrowBarState.alliumPlayerData.values()) {
-            if (alliumData.isExpired()) continue;
-            UUID uuid = alliumData.uuid;
-            if (uuid.equals(cameraEntity.getUuid())) continue;
-            PlayerEntity loadedPlayer = client.world.getPlayerByUuid(uuid);
-            if (loadedPlayer == null || loadedPlayer.isInvisible() || loadedPlayer.isSneaking() || alliumData.wearingPumpkin) {
-                hiddenPlayerCount++;
-            }
-        }
-        
-        // Only draw locator bar background if there are hidden players (vanilla would be empty)
-        if (hiddenPlayerCount > 0) {
-            int barX = (screenWidth - 182) / 2;
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
-        }
+        // Draw locator bar background
+        int barX = (screenWidth - 182) / 2;
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
         
         // Render Allium-restored players
-        // Only render players that are hidden (sneaking/invisible/pumpkin)
-        // This prevents duplicate rendering with vanilla
         for (AlliumPlayerData alliumData : CrowBarState.alliumPlayerData.values()) {
             if (alliumData.isExpired()) continue;
             
             UUID uuid = alliumData.uuid;
             if (uuid.equals(cameraEntity.getUuid())) continue;
-            
-            // Only render via Allium if player is hidden (sneaking/invisible/pumpkin)
-            // This is the core purpose of the Allium integration
-            PlayerEntity loadedPlayer = client.world.getPlayerByUuid(uuid);
-            if (loadedPlayer != null && !loadedPlayer.isInvisible() && !loadedPlayer.isSneaking() && !alliumData.wearingPumpkin) {
-                // Player is visible via vanilla, skip to avoid duplicate rendering
-                continue;
-            }
             
             // Calculate position
             double deltaX = alliumData.x - cameraEntity.getX();
@@ -110,8 +111,8 @@ public final class CrowBarHudRenderer {
             int dotCenterY = markerY + 4;
             
             // Always draw tinted locator dot
-            int teamColor = getTeamColor(uuid);
-            drawTintedLocatorDot(context, dotCenterX, dotCenterY, size, teamColor);
+            int dotColor = getDotColor(uuid);
+            drawTintedLocatorDot(context, dotCenterX, dotCenterY, size, dotColor);
             
             // Optionally draw skin on top
             if (CrowBarState.skinsEnabled) {
@@ -121,21 +122,25 @@ public final class CrowBarHudRenderer {
                 }
             }
             
-            // Draw distance text anchored to dot
-            if (CrowBarState.showDistance && distance > 0) {
-                String distanceText = String.format("%.0fm", distance);
-                int textX = dotCenterX - textRenderer.getWidth(distanceText) / 2;
-                int textY = dotCenterY + size / 2 + 2;
-                context.drawTextWithShadow(textRenderer, distanceText, textX, textY, 0xFFFFFFFF);
-            }
-            
-            // Draw name tag if enabled
-            if (CrowBarState.nameTagsEnabled) {
-                String ownerName = getName(uuid);
-                int textWidth = textRenderer.getWidth(ownerName);
+            // Draw name tag and/or distance text
+            if (CrowBarState.nameTagsEnabled || CrowBarState.showDistance) {
+                String text = "";
+                if (CrowBarState.nameTagsEnabled) {
+                    text = getName(uuid);
+                }
+                if (CrowBarState.showDistance && distance > 0) {
+                    String distanceText = String.format("%.0fm", distance);
+                    if (CrowBarState.nameTagsEnabled) {
+                        text = text + " " + distanceText;
+                    } else {
+                        text = distanceText;
+                    }
+                }
+                
+                int textWidth = textRenderer.getWidth(text);
                 int textX = dotCenterX - textWidth / 2;
-                int textY = dotCenterY - 10;
-                context.drawTextWithShadow(textRenderer, ownerName, textX, textY, 0xFFFFFFFF);
+                int textY = dotCenterY - size / 2 - 12;
+                context.drawTextWithShadow(textRenderer, text, textX, textY, 0xFFFFFFFF);
             }
         }
     }
@@ -145,38 +150,44 @@ public final class CrowBarHudRenderer {
         int x = centerX - halfSize;
         int y = centerY - halfSize;
         
-        // For now, use CPU draw with team color and black outline
-        // TODO: Use sprite tinting when RenderSystem API is available
-        context.fill(x, y, x + size, y + size, color);
-        
-        // Black outline (1 pixel)
-        context.fill(x, y, x + size, y + 1, 0xFF000000); // top
-        context.fill(x, y + size - 1, x + size, y + size, 0xFF000000); // bottom
-        context.fill(x, y, x + 1, y + size, 0xFF000000); // left
-        context.fill(x + size - 1, y, x + size, y + size, 0xFF000000); // right
+        // Draw tinted vanilla sprite
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, LOCATOR_DOT_SPRITE, x, y, size, size, color);
     }
 
-    private static int getTeamColor(UUID uuid) {
+    private static int getDotColor(UUID uuid) {
         MinecraftClient client = MinecraftClient.getInstance();
         
-        // Try to get from Allium data first (includes team color for hidden players)
+        // Priority 1: Allium-provided team color (includes fallback logic on server side)
         AlliumPlayerData alliumData = CrowBarState.alliumPlayerData.get(uuid);
         if (alliumData != null && !alliumData.isExpired()) {
-            // Clamp RGB to 24 bits and convert to ARGB
             int rgb = alliumData.teamColor & 0xFFFFFF;
-            return 0xFF000000 | rgb;
+            int argb = 0xFF000000 | rgb;
+            System.out.println("[CrowBar HUD] Allium color for " + uuid + ": " + Integer.toHexString(argb));
+            return argb;
         }
         
-        // Try to get loaded player entity next
+        // Priority 2: Client-side loaded PlayerEntity team color
         if (client.world != null) {
             PlayerEntity player = client.world.getPlayerByUuid(uuid);
             if (player != null) {
-                return getTeamColor(player);
+                int teamColor = getTeamColor(player);
+                if ((teamColor & 0xFFFFFF) != 0xFFFFFF) {
+                    System.out.println("[CrowBar HUD] Client team color for " + uuid + ": " + Integer.toHexString(teamColor));
+                    return teamColor;
+                }
             }
         }
         
-        // Fallback: return white default
-        return 0xFFFFFFFF;
+        // Priority 3: Mojang-ish generated fallback color
+        int fallback = getMojangishGeneratedColor(uuid);
+        System.out.println("[CrowBar HUD] Fallback color for " + uuid + ": " + Integer.toHexString(fallback));
+        return fallback;
+    }
+    
+    private static int getMojangishGeneratedColor(UUID uuid) {
+        int hash = uuid.hashCode();
+        int index = Math.floorMod(hash, MOJANGISH_DOT_COLORS.length);
+        return 0xFF000000 | MOJANGISH_DOT_COLORS[index];
     }
 
     private static int getTeamColor(PlayerEntity player) {
@@ -252,8 +263,8 @@ public final class CrowBarHudRenderer {
         int iconCenterY = barY + 2;
         
         // Draw tinted dot for self
-        int teamColor = getTeamColor(client.player.getUuid());
-        drawTintedLocatorDot(context, iconCenterX, iconCenterY, iconSize, teamColor);
+        int dotColor = getDotColor(client.player.getUuid());
+        drawTintedLocatorDot(context, iconCenterX, iconCenterY, iconSize, dotColor);
         
         // Draw skin on top if enabled
         if (CrowBarState.skinsEnabled) {

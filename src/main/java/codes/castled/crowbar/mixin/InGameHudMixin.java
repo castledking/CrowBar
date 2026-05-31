@@ -25,4 +25,9 @@ public abstract class InGameHudMixin {
             CrowBarHudRenderer.drawSelfView(context);
         }
     }
+
+    @Inject(method = "renderMainHud", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/hud/InGameHud;renderMountHealth(Lnet/minecraft/client/gui/DrawContext;)V", shift = At.Shift.AFTER))
+    private void crowbar$renderAlliumBeforeXp(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
+        CrowBarHudRenderer.renderAlliumRestoredPlayers(context, tickCounter);
+    }
 }

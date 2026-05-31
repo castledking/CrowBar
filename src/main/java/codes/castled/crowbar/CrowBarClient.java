@@ -3,8 +3,8 @@ package codes.castled.crowbar;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
@@ -99,11 +99,14 @@ public final class CrowBarClient implements ClientModInitializer {
             }
         });
 
-        // Register independent HUD callback for Allium-restored players
-        // This runs even when vanilla locator bar has no waypoints
-        HudRenderCallback.EVENT.register((drawContext, tickCounter) -> {
-            CrowBarHudRenderer.renderAlliumRestoredPlayers(drawContext, tickCounter);
-        });
+        // Clear Allium data on disconnect so stale entries don't carry over
+        // to LAN worlds or servers without Allium
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
+                CrowBarState.alliumPlayerData.clear()
+        );
+
+        // Note: Allium-restored player rendering is now injected via InGameHudMixin
+        // before renderExperienceBar, so it renders behind the XP number.
     }
 
     private static void showToggle(net.minecraft.client.MinecraftClient client, String label, boolean enabled) {

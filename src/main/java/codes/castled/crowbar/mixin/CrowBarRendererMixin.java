@@ -1,6 +1,5 @@
 package codes.castled.crowbar.mixin;
 
-import codes.castled.crowbar.AlliumPlayerData;
 import codes.castled.crowbar.CrowBarState;
 import com.mojang.datafixers.util.Either;
 import net.fabricmc.api.EnvType;
@@ -51,12 +50,22 @@ public abstract class CrowBarRendererMixin {
     private void crowbar$hideLocatorBarInSelfView(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
         if (CrowBarState.viewSelfEnabled) {
             ci.cancel();
+            return;
+        }
+        Entity cameraEntity = MinecraftClient.getInstance().getCameraEntity();
+        if (cameraEntity != null && CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid())) {
+            ci.cancel();
         }
     }
 
     @Inject(method = "renderAddons", at = @At("HEAD"), cancellable = true)
     private void crowbar$hideLocatorAddonsInSelfView(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
         if (CrowBarState.viewSelfEnabled) {
+            ci.cancel();
+            return;
+        }
+        Entity cameraEntity = MinecraftClient.getInstance().getCameraEntity();
+        if (cameraEntity != null && CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid())) {
             ci.cancel();
         }
     }
@@ -78,12 +87,6 @@ public abstract class CrowBarRendererMixin {
         String name = entry == null ? uuid.toString() : entry.getProfile().name();
         CROWBAR$UUID_NAME_CACHE.put(uuid, name);
         return name;
-    }
-
-    @Unique
-    private boolean crowbar$isNPC(String name) {
-        // Check if the name looks like a UUID (contains hyphens and is 36 chars)
-        return name != null && name.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
     }
 
     @Inject(method = "renderAddons", at = @At("TAIL"))
@@ -136,44 +139,7 @@ public abstract class CrowBarRendererMixin {
         });
 
         if (CrowBarState.forceShowAll) {
-            // First, add waypoints from Allium data (if available)
-            for (AlliumPlayerData alliumData : CrowBarState.alliumPlayerData.values()) {
-                if (alliumData.isExpired()) {
-                    continue;
-                }
-                if (alliumData.uuid.equals(cameraEntity.getUuid())) {
-                    continue;
-                }
-                if (trackedUuids.contains(alliumData.uuid)) {
-                    continue;
-                }
-
-                // Calculate yaw from Allium position data
-                double deltaX = alliumData.x - cameraEntity.getX();
-                double deltaZ = alliumData.z - cameraEntity.getZ();
-                double yaw = Math.toDegrees(Math.atan2(deltaZ, deltaX)) - camera.getYaw() - 90.0D;
-                yaw = MathHelper.wrapDegrees(yaw);
-
-                if (yaw <= -61.0D || yaw > 60.0D) {
-                    continue;
-                }
-
-                int baseX = MathHelper.ceil((screenWidth - 9.0F) / 2.0F);
-                int markerX = baseX + MathHelper.floor(yaw * 173.0D / 2.0D / 60.0D);
-                int markerY = locatorBarY - 2;
-                String ownerName = crowbar$getName(alliumData.uuid);
-
-                // Filter out NPCs
-                if (crowbar$isNPC(ownerName)) {
-                    continue;
-                }
-
-                boolean valid = markerX >= 0 && markerX < screenWidth && markerY >= 0 && markerY < screenHeight;
-                double distance = Math.sqrt(deltaX * deltaX + (alliumData.y - cameraEntity.getY()) * (alliumData.y - cameraEntity.getY()) + deltaZ * deltaZ);
-                waypoints.add(new WaypointRenderData(markerX, markerY, ownerName, alliumData.uuid, valid, distance));
-            }
-
-            // Then, add waypoints from loaded entities (fallback)
+            // Add waypoints from loaded entities (fallback for players without Allium data)
             for (PlayerEntity player : world.getPlayers()) {
                 if (player == cameraEntity) {
                     continue;
@@ -182,7 +148,7 @@ public abstract class CrowBarRendererMixin {
                 if (trackedUuids.contains(playerUuid)) {
                     continue;
                 }
-                // Skip if we already have Allium data for this player
+                // Skip if we already have Allium data for this player (HUD renderer handles it)
                 if (CrowBarState.alliumPlayerData.containsKey(playerUuid) && !CrowBarState.alliumPlayerData.get(playerUuid).isExpired()) {
                     continue;
                 }
@@ -196,11 +162,6 @@ public abstract class CrowBarRendererMixin {
                 int markerX = baseX + MathHelper.floor(yaw * 173.0D / 2.0D / 60.0D);
                 int markerY = locatorBarY - 2;
                 String ownerName = crowbar$getName(playerUuid);
-
-                // Filter out NPCs
-                if (crowbar$isNPC(ownerName)) {
-                    continue;
-                }
 
                 boolean valid = markerX >= 0 && markerX < screenWidth && markerY >= 0 && markerY < screenHeight;
                 double distance = crowbar$getDistance(player, cameraEntity);
