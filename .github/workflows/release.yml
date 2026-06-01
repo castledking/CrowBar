@@ -77,8 +77,6 @@ jobs:
           echo "jar_26=${JAR_26}" >> "$GITHUB_OUTPUT"
           echo "sources_jar_26=${SOURCES_JAR_26}" >> "$GITHUB_OUTPUT"
 
-          echo 'game_versions=["1.21.6","1.21.7","1.21.8","1.21.9","1.21.10","1.21.11","26.1.x"]' >> "$GITHUB_OUTPUT"
-
           {
             echo "changelog<<__CROWBAR_CHANGELOG__"
             cat "$NOTES"
@@ -108,17 +106,42 @@ jobs:
             version26/build/libs/${{ steps.meta.outputs.jar_26 }}
             version26/build/libs/${{ steps.meta.outputs.sources_jar_26 }}
 
-      - name: Publish to Modrinth
+      - name: Publish 1.21.x to Modrinth
         uses: cloudnode-pro/modrinth-publish@v2
         with:
           token: ${{ secrets.MODRINTH_TOKEN }}
           project: yP7IdsBH
-          name: CrowBar v${{ steps.meta.outputs.version }}
+          name: CrowBar v${{ steps.meta.outputs.version }} for 1.21.6-1.21.11
           version: ${{ steps.meta.outputs.version }}
           changelog: ${{ steps.meta.outputs.changelog }}
           loaders: fabric
-          game-versions: ${{ steps.meta.outputs.game_versions }}
+          game-versions: |-
+            1.21.6
+            1.21.7
+            1.21.8
+            1.21.9
+            1.21.10
+            1.21.11
           files: |-
             version21/build/libs/${{ steps.meta.outputs.jar_21 }}
-            version26/build/libs/${{ steps.meta.outputs.jar_26 }}
+            version21/build/libs/${{ steps.meta.outputs.sources_jar_21 }}
           primary-file: ${{ steps.meta.outputs.jar_21 }}
+          file-types: |-
+            ${{ steps.meta.outputs.sources_jar_21 }}=sources-jar
+
+      - name: Publish 26.1.x to Modrinth
+        uses: cloudnode-pro/modrinth-publish@v2
+        with:
+          token: ${{ secrets.MODRINTH_TOKEN }}
+          project: yP7IdsBH
+          name: CrowBar v${{ steps.meta.outputs.version }} for 26.1.x
+          version: ${{ steps.meta.outputs.version }}
+          changelog: ${{ steps.meta.outputs.changelog }}
+          loaders: fabric
+          game-versions: ">=26.1.2 <26.2"
+          files: |-
+            version26/build/libs/${{ steps.meta.outputs.jar_26 }}
+            version26/build/libs/${{ steps.meta.outputs.sources_jar_26 }}
+          primary-file: ${{ steps.meta.outputs.jar_26 }}
+          file-types: |-
+            ${{ steps.meta.outputs.sources_jar_26 }}=sources-jar
