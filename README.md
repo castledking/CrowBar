@@ -37,7 +37,7 @@ Without Allium, CrowBar falls back to normal client-visible players, including L
 Use the jar that matches your Minecraft line:
 
 - `CrowBar-1.21.x`: Minecraft 1.21.6-1.21.11, Java 21, Fabric Loader 0.18.4 or newer, Fabric API 0.141.4 or newer.
-- `CrowBar-26.1.x`: Minecraft 26.1.2 or newer in the 26.1.x line, Java 25, Fabric Loader 0.19.2 or newer, Fabric API 0.150.0 or newer.
+- `CrowBar-26.1.x`: Minecraft 26.1.x, Java 25, Fabric Loader 0.19.2 or newer, Fabric API 0.150.0 or newer.
 
 Mod Menu is optional, but recommended for the config screen.
 
