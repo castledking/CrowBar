@@ -7,24 +7,39 @@
   <a href="https://castled.codes"><img alt="CASTLED CODEX" src="https://castled.codes/assets/logo-banner.png" width="140" height="35"></a>
 </p>
 
-CrowBar is a Fabric client mod for Minecraft 1.21.11 that extends the vanilla locator bar with readable player name tags, skin markers, and a self-view capture mode.
+CrowBar is a Fabric client mod for Minecraft 1.21.6-1.21.11 and 26.1.x that extends the locator bar with readable player name tags, skin markers, distance text, team-colored dots, and a self-view capture mode.
 
 ## Features
 
 - Renders player names above locator bar markers.
 - Can replace locator dots with player skin faces.
+- Shows optional distance text next to player names.
+- Preserves team colors when a team color is available.
 - Adds a self-view mode for clean locator bar screenshots.
 - Hides hearts, hunger, armor, and the vanilla locator bar while self-view mode is active.
 - Works as a client-side mod; servers do not need to install CrowBar.
 - Includes Mod Menu support for toggling features in-game.
 
+## Allium Servers
+
+Allium Essentials is an optional Paper server plugin that can send CrowBar a dedicated locator payload. When Allium is installed, CrowBar does not have to rely on vanilla locator waypoints: the server can send the player UUID, position, team color, and visibility state needed for the custom locator bar.
+
+That lets CrowBar keep rendering players who are hidden, sneaking, invisible, or otherwise missing from vanilla waypoint data. It also lets the server keep NPC waypoint transmit range at zero while still giving CrowBar the real player data it needs.
+
+Without Allium, CrowBar falls back to normal client-visible players, including LAN and integrated-server sessions.
+
+<p>
+  <a href="https://modrinth.com/plugin/allium-essentials#download"><img alt="Download Allium on Modrinth" src="https://img.shields.io/badge/Download%20Allium-Modrinth-00AF5C?style=for-the-badge&logo=modrinth&logoColor=white"></a>
+</p>
+
 ## Requirements
 
-- Minecraft 1.21.11
-- Fabric Loader 0.18.4 or newer
-- Fabric API 0.141.4 or newer
-- Java 21
-- Mod Menu is optional, but recommended for the config screen.
+Use the jar that matches your Minecraft line:
+
+- `CrowBar-1.21.x`: Minecraft 1.21.6-1.21.11, Java 21, Fabric Loader 0.18.4 or newer, Fabric API 0.141.4 or newer.
+- `CrowBar-26.1.x`: Minecraft 26.1.2 or newer in the 26.1.x line, Java 25, Fabric Loader 0.19.2 or newer, Fabric API 0.150.0 or newer.
+
+Mod Menu is optional, but recommended for the config screen.
 
 ## Controls
 
@@ -32,24 +47,25 @@ Default keybinds:
 
 - `N`: Toggle locator name tags
 - `B`: Toggle locator skins
-- `V`: Toggle self-view locator bar
+- `Z`: View self locator bar
+- `X`: Show distance
 
 Keybinds can be changed from Minecraft's controls menu under the CrowBar category.
 
 ## Installation
 
-1. Install Fabric Loader for Minecraft 1.21.11.
+1. Install Fabric Loader for your Minecraft version.
 2. Install Fabric API.
-3. Put the CrowBar jar into your `mods` folder.
+3. Put the matching CrowBar jar into your `mods` folder.
 4. Launch the game.
 
 ## Building
 
 ```bash
-./gradlew build
+./gradlew :version21:build :version26:build
 ```
 
-The built jar is written to `build/libs/`.
+The built jars are written to `version21/build/libs/` and `version26/build/libs/`.
 
 ## Links
 

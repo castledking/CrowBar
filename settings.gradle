@@ -10,8 +10,12 @@ dependencyResolutionManagement {
     repositories {
         maven { url = "https://maven.fabricmc.net/" }
         maven { url = "https://maven.terraformersmc.com/releases/" }
+        maven { url = "https://libraries.minecraft.net/" }
         mavenCentral()
     }
 }
 
 rootProject.name = "CrowBar"
+include "common"
+include "version21"
+include "version26"

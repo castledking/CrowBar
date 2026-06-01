@@ -1,0 +1,14 @@
+{
+  "key.category.crowbar.controls": "CrowBar",
+  "key.crowbar.toggle_nametags": "Toggle locator name tags",
+  "key.crowbar.toggle_skins": "Toggle locator skins",
+  "key.crowbar.view_self": "View self locator bar",
+  "key.crowbar.show_distance": "Show distance",
+  "crowbar.config.title": "CrowBar",
+  "crowbar.config.nametags": "Name tags",
+  "crowbar.config.skins": "Skins",
+  "crowbar.config.view_self": "View self",
+  "crowbar.config.show_distance": "Show distance",
+  "crowbar.config.on": "On",
+  "crowbar.config.off": "Off"
+}

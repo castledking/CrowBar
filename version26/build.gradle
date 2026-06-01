@@ -1,0 +1,61 @@
+plugins {
+    id "net.fabricmc.fabric-loom" version "1.16.3"
+}
+
+group = rootProject.maven_group
+version = rootProject.mod_version
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    maven { url = "https://maven.terraformersmc.com/releases/" }
+}
+
+loom {
+    mods {
+        "crowbar" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    implementation project(":common")
+    include project(":common")
+
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+    runtimeOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+}
+
+processResources {
+    inputs.property "version", project.version
+    inputs.property "minecraft_version", project.minecraft_version
+    inputs.property "minecraft_dependency", project.minecraft_dependency
+    inputs.property "loader_version", project.loader_version
+    inputs.property "fabric_api_version", project.fabric_api_version
+
+    filesMatching("fabric.mod.json") {
+        expand(
+                "version": project.version,
+                "minecraft_version": project.minecraft_version,
+                "minecraft_dependency": project.minecraft_dependency,
+                "loader_version": project.loader_version,
+                "fabric_api_version": project.fabric_api_version
+        )
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.toVersion(25)
+    targetCompatibility = JavaVersion.toVersion(25)
+}
