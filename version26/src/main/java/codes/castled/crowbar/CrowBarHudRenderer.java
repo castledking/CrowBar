@@ -17,6 +17,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.player.PlayerSkin;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.PlayerTeam;
 
 import java.util.ArrayList;
@@ -28,7 +29,21 @@ public final class CrowBarHudRenderer {
     private static final Identifier EXPERIENCE_BACKGROUND = Identifier.withDefaultNamespace("hud/experience_bar_background");
     private static final Identifier EXPERIENCE_PROGRESS = Identifier.withDefaultNamespace("hud/experience_bar_progress");
     private static final Identifier LOCATOR_BAR_BACKGROUND = Identifier.fromNamespaceAndPath("crowbar", "hud/locator_bar_background");
-    private static final Identifier LOCATOR_DOT_SPRITE = Identifier.fromNamespaceAndPath("crowbar", "hud/locator_bar_dot/default_0");
+    private static final int LOCATOR_DOT_SIZE = 9;
+    private static final int LOCATOR_ARROW_WIDTH = 7;
+    private static final int LOCATOR_ARROW_HEIGHT = 5;
+    private static final double LOCATOR_ARROW_MAX_DISTANCE = 48.0D;
+    private static final double LOCATOR_ARROW_VERTICAL_VIEW_HALF_ANGLE = 35.0D;
+    private static final double LOCATOR_VIEW_MIN_YAW = -61.0D;
+    private static final double LOCATOR_VIEW_MAX_YAW = 60.0D;
+    private static final Identifier LOCATOR_ARROW_UP = Identifier.fromNamespaceAndPath("crowbar", "hud/locator_bar_arrow_up");
+    private static final Identifier LOCATOR_ARROW_DOWN = Identifier.fromNamespaceAndPath("crowbar", "hud/locator_bar_arrow_down");
+    private static final Identifier[] LOCATOR_DOT_SPRITES = {
+            Identifier.fromNamespaceAndPath("crowbar", "hud/locator_bar_dot/default_0"),
+            Identifier.fromNamespaceAndPath("crowbar", "hud/locator_bar_dot/default_1"),
+            Identifier.fromNamespaceAndPath("crowbar", "hud/locator_bar_dot/default_2"),
+            Identifier.fromNamespaceAndPath("crowbar", "hud/locator_bar_dot/default_3")
+    };
 
     private static final float GOLDEN_ANGLE = 137.508f;
 
@@ -60,7 +75,7 @@ public final class CrowBarHudRenderer {
             if (alliumData.isExpired()) continue;
             hasAlliumSource = true;
             UUID uuid = alliumData.uuid;
-            addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, alliumData.x, alliumData.y, alliumData.z);
+            addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, alliumData.x, alliumData.y, alliumData.z, true);
         }
 
         boolean hasIntegratedServerSource = client.getSingleplayerServer() != null;
@@ -68,7 +83,7 @@ public final class CrowBarHudRenderer {
             for (ServerPlayer player : client.getSingleplayerServer().getPlayerList().getPlayers()) {
                 UUID uuid = player.getUUID();
                 if (uuid.equals(cameraEntity.getUUID())) continue;
-                addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, player.getX(), player.getY(), player.getZ());
+                addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, player.getX(), player.getY(), player.getZ(), false);
             }
         }
 
@@ -79,7 +94,7 @@ public final class CrowBarHudRenderer {
             for (Player player : client.level.players()) {
                 UUID uuid = player.getUUID();
                 if (uuid.equals(cameraEntity.getUUID())) continue;
-                addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, player.getX(), player.getY(), player.getZ());
+                addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, player.getX(), player.getY(), player.getZ(), false);
             }
         }
 
@@ -89,6 +104,7 @@ public final class CrowBarHudRenderer {
         if (entries.isEmpty()) return;
 
         EntryRenderData closest = entries.stream()
+                .filter(EntryRenderData::markerVisible)
                 .min(Comparator.comparingInt(e -> Math.abs(e.markerX - centerX)))
                 .orElse(null);
 
@@ -103,6 +119,7 @@ public final class CrowBarHudRenderer {
 
         if (CrowBarState.skinsEnabled) {
             for (EntryRenderData entry : entries) {
+                if (!entry.markerVisible) continue;
                 if (entry == closest) continue;
                 renderLocatorSkin(context, entry);
             }
@@ -114,6 +131,7 @@ public final class CrowBarHudRenderer {
 
         if (CrowBarState.nameTagsEnabled || CrowBarState.showDistance) {
             for (EntryRenderData entry : entries) {
+                if (!entry.markerVisible) continue;
                 if (entry == closest) continue;
                 renderLocatorLabel(context, font, entry, false);
             }
@@ -124,7 +142,7 @@ public final class CrowBarHudRenderer {
         }
     }
 
-    private static void addEntryForPosition(Entity cameraEntity, Camera camera, int screenWidth, int locatorBarY, List<EntryRenderData> entries, UUID uuid, double x, double y, double z) {
+    private static void addEntryForPosition(Entity cameraEntity, Camera camera, int screenWidth, int locatorBarY, List<EntryRenderData> entries, UUID uuid, double x, double y, double z, boolean allowVerticalArrow) {
         if (uuid.equals(cameraEntity.getUUID())) return;
 
         double deltaX = x - cameraEntity.getX();
@@ -136,32 +154,44 @@ public final class CrowBarHudRenderer {
         while (relativeYaw < -180) relativeYaw += 360;
         while (relativeYaw > 180) relativeYaw -= 360;
 
-        if (relativeYaw <= -61.0D || relativeYaw > 60.0D) return;
+        double distance = Math.sqrt(deltaX * deltaX + (y - cameraEntity.getY()) * (y - cameraEntity.getY()) + deltaZ * deltaZ);
+        boolean markerVisible = isWithinLocatorView(relativeYaw);
+        if (!markerVisible) return;
+
+        Identifier arrowSprite = allowVerticalArrow
+                ? getArrowSpriteForPosition(camera, distance, x, y, z)
+                : null;
 
         int baseX = Mth.ceil((screenWidth - 9.0F) / 2.0F);
         int markerX = baseX + Mth.floor(relativeYaw * 173.0D / 2.0D / 60.0D);
         int markerY = locatorBarY - 2;
 
-        double distance = Math.sqrt(deltaX * deltaX + (y - cameraEntity.getY()) * (y - cameraEntity.getY()) + deltaZ * deltaZ);
-
         int sizeHundredths = calculateSizeFromDistance((float) distance, 9);
         int size = sizeHundredths / 100;
         int dotCenterX = markerX + 4;
         int dotCenterY = markerY + 4;
+        Identifier dotSprite = getDotSpriteForDistance(distance);
 
-        entries.add(new EntryRenderData(uuid, markerX, dotCenterX, dotCenterY, size, distance));
+        entries.add(new EntryRenderData(uuid, markerX, dotCenterX, dotCenterY, size, distance, dotSprite, arrowSprite, markerVisible));
     }
 
     private static void renderLocatorDot(GuiGraphicsExtractor context, EntryRenderData entry) {
-        int dotColor = getDotColor(entry.uuid);
-        drawTintedLocatorDot(context, entry.dotCenterX, entry.dotCenterY, entry.size, dotColor);
+        if (entry.markerVisible) {
+            int dotColor = getDotColor(entry.uuid);
+            drawTintedLocatorDot(context, entry.dotCenterX, entry.dotCenterY, entry.dotSprite, dotColor);
+        }
+        if (entry.arrowSprite != null) {
+            drawVerticalArrow(context, entry.dotCenterX, entry.dotCenterY, entry.arrowSprite);
+        }
     }
 
     private static void renderLocatorSkin(GuiGraphicsExtractor context, EntryRenderData entry) {
+        if (!entry.markerVisible) return;
         renderPlayerFace(context, entry.uuid, entry.dotCenterX - entry.size / 2, entry.dotCenterY - entry.size / 2, entry.size);
     }
 
     private static void renderLocatorLabel(GuiGraphicsExtractor context, Font font, EntryRenderData entry, boolean isClosest) {
+        if (!entry.markerVisible) return;
         String text = "";
         if (CrowBarState.nameTagsEnabled) {
             text = getName(entry.uuid);
@@ -180,19 +210,58 @@ public final class CrowBarHudRenderer {
             int textWidth = font.width(text);
             int textX = entry.dotCenterX - textWidth / 2;
             int textY = entry.dotCenterY - entry.size / 2 - 12;
+            if (LOCATOR_ARROW_UP.equals(entry.arrowSprite)) {
+                textY -= LOCATOR_ARROW_HEIGHT + 1;
+            }
             context.text(font, text, textX, textY, textColor);
         }
     }
 
-    private record EntryRenderData(UUID uuid, int markerX, int dotCenterX, int dotCenterY, int size, double distance) {
+    private record EntryRenderData(UUID uuid, int markerX, int dotCenterX, int dotCenterY, int size, double distance, Identifier dotSprite, Identifier arrowSprite, boolean markerVisible) {
     }
 
-    private static void drawTintedLocatorDot(GuiGraphicsExtractor context, int centerX, int centerY, int size, int color) {
-        int halfSize = size / 2;
+    private static void drawTintedLocatorDot(GuiGraphicsExtractor context, int centerX, int centerY, Identifier sprite, int color) {
+        int halfSize = LOCATOR_DOT_SIZE / 2;
         int x = centerX - halfSize;
         int y = centerY - halfSize;
 
-        context.blitSprite(RenderPipelines.GUI_TEXTURED, LOCATOR_DOT_SPRITE, x, y, size, size, color);
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, LOCATOR_DOT_SIZE, LOCATOR_DOT_SIZE, color);
+    }
+
+    private static Identifier getDotSpriteForDistance(double distance) {
+        if (distance >= 333.0D) return LOCATOR_DOT_SPRITES[3];
+        if (distance >= 231.0D) return LOCATOR_DOT_SPRITES[2];
+        if (distance >= 129.0D) return LOCATOR_DOT_SPRITES[1];
+        return LOCATOR_DOT_SPRITES[0];
+    }
+
+    private static boolean isWithinLocatorView(double relativeYaw) {
+        return relativeYaw > LOCATOR_VIEW_MIN_YAW && relativeYaw <= LOCATOR_VIEW_MAX_YAW;
+    }
+
+    private static Identifier getArrowSpriteForPosition(Camera camera, double distance, double targetX, double targetY, double targetZ) {
+        if (distance > LOCATOR_ARROW_MAX_DISTANCE) return null;
+        double pitchDelta = getTargetPitchDelta(camera, targetX, targetY, targetZ);
+        if (Math.abs(pitchDelta) <= LOCATOR_ARROW_VERTICAL_VIEW_HALF_ANGLE) return null;
+        return pitchDelta < 0.0D ? LOCATOR_ARROW_UP : LOCATOR_ARROW_DOWN;
+    }
+
+    private static double getTargetPitchDelta(Camera camera, double targetX, double targetY, double targetZ) {
+        Vec3 cameraPosition = camera.position();
+        double deltaX = targetX - cameraPosition.x();
+        double deltaZ = targetZ - cameraPosition.z();
+        double targetCenterY = targetY + 1.0D;
+        double horizontalDistance = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
+        double targetPitch = -Math.toDegrees(Math.atan2(targetCenterY - cameraPosition.y(), horizontalDistance));
+        return targetPitch - camera.xRot();
+    }
+
+    private static void drawVerticalArrow(GuiGraphicsExtractor context, int centerX, int centerY, Identifier sprite) {
+        int x = centerX - LOCATOR_ARROW_WIDTH / 2;
+        int y = LOCATOR_ARROW_DOWN.equals(sprite)
+                ? centerY + LOCATOR_DOT_SIZE / 2 + 1
+                : centerY - LOCATOR_DOT_SIZE / 2 - LOCATOR_ARROW_HEIGHT;
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, LOCATOR_ARROW_WIDTH, LOCATOR_ARROW_HEIGHT, 0xFFFFFFFF);
     }
 
     private static int getDotColor(UUID uuid) {
@@ -338,7 +407,7 @@ public final class CrowBarHudRenderer {
         int iconCenterY = barY + 2;
 
         int dotColor = getDotColor(client.player.getUUID());
-        drawTintedLocatorDot(context, iconCenterX, iconCenterY, iconSize, dotColor);
+        drawTintedLocatorDot(context, iconCenterX, iconCenterY, LOCATOR_DOT_SPRITES[0], dotColor);
 
         if (CrowBarState.skinsEnabled) {
             renderPlayerFace(context, client.player.getUUID(), iconCenterX - iconSize / 2, iconCenterY - iconSize / 2, iconSize);

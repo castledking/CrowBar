@@ -8,7 +8,9 @@ import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.util.Identifier;
 
-import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public final class AlliumPacketHandler {
     private static final Gson GSON = new Gson();
@@ -21,6 +23,7 @@ public final class AlliumPacketHandler {
             JsonArray players = root.getAsJsonArray("players");
             if (players == null) return;
 
+            Map<UUID, AlliumPlayerData> snapshot = new HashMap<>();
             for (int i = 0; i < players.size(); i++) {
                 JsonObject playerObj = players.get(i).getAsJsonObject();
                 String uuidStr = playerObj.get("uuid").getAsString();
@@ -33,12 +36,15 @@ public final class AlliumPacketHandler {
                 int teamColor = playerObj.has("teamColor") ? playerObj.get("teamColor").getAsInt() : 0xFFFFFF;
 
                 try {
-                    java.util.UUID uuid = java.util.UUID.fromString(uuidStr);
+                    UUID uuid = UUID.fromString(uuidStr);
                     AlliumPlayerData data = new AlliumPlayerData(uuid, x, y, z, wearingPumpkin, sneaking, vanished, teamColor);
-                    CrowBarState.alliumPlayerData.put(uuid, data);
+                    snapshot.put(uuid, data);
                 } catch (IllegalArgumentException ignored) {
                 }
             }
+
+            CrowBarState.alliumPlayerData.clear();
+            CrowBarState.alliumPlayerData.putAll(snapshot);
         } catch (Exception e) {
             // Silent fail - JSON parsing errors are not critical
         }
