@@ -52,6 +52,7 @@ public final class CrowBarHudRenderer {
 
     public static void renderLocatorBarPlayers(GuiGraphicsExtractor context, DeltaTracker tickCounter) {
         if (CrowBarState.viewSelfEnabled) return;
+        if (CrowBarState.isExternalRenderSuppressed()) return;
 
         Minecraft client = Minecraft.getInstance();
         if (client.player == null || client.level == null) return;

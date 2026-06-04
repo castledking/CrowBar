@@ -52,6 +52,7 @@ public final class CrowBarHudRenderer {
 
     public static void renderAlliumRestoredPlayers(DrawContext context, RenderTickCounter tickCounter) {
         if (CrowBarState.viewSelfEnabled) return;
+        if (CrowBarState.isExternalRenderSuppressed()) return;
 
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || client.world == null) return;

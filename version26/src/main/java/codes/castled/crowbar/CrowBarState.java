@@ -15,6 +15,7 @@ public final class CrowBarState {
     public static boolean skinsEnabled = true;
     public static boolean viewSelfEnabled = false;
     public static boolean showDistance = false;
+    private static final Map<String, Boolean> externalRenderSuppressions = new ConcurrentHashMap<>();
 
     public static final Map<UUID, AlliumPlayerData> alliumPlayerData = new ConcurrentHashMap<>();
     private static boolean alliumDataReceived = false;
@@ -77,6 +78,24 @@ public final class CrowBarState {
         }
 
         return false;
+    }
+
+    public static void setExternalRenderSuppressed(String owner, boolean suppressed, boolean keepVanillaLocatorBar) {
+        String key = owner == null || owner.isBlank() ? "external" : owner;
+        if (suppressed) {
+            externalRenderSuppressions.put(key, keepVanillaLocatorBar);
+        } else {
+            externalRenderSuppressions.remove(key);
+        }
+    }
+
+    public static boolean isExternalRenderSuppressed() {
+        return !externalRenderSuppressions.isEmpty();
+    }
+
+    public static boolean shouldKeepVanillaLocatorBarDuringExternalSuppression() {
+        if (externalRenderSuppressions.isEmpty()) return true;
+        return externalRenderSuppressions.values().stream().allMatch(Boolean::booleanValue);
     }
 
     private CrowBarState() {

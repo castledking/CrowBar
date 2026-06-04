@@ -17,6 +17,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LocatorBarRenderer.class)
 public abstract class CrowBarRendererMixin {
     private static boolean shouldCancelLocatorBar() {
+        if (CrowBarState.isExternalRenderSuppressed()) {
+            return !CrowBarState.shouldKeepVanillaLocatorBarDuringExternalSuppression();
+        }
         if (CrowBarState.viewSelfEnabled) return true;
         Entity cameraEntity = Minecraft.getInstance().getCameraEntity();
         if (cameraEntity == null) return false;

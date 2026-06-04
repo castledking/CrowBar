@@ -47,6 +47,12 @@ public abstract class CrowBarRendererMixin {
 
     @Inject(method = "renderBar", at = @At("HEAD"), cancellable = true)
     private void crowbar$hideLocatorBarInSelfView(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
+        if (CrowBarState.isExternalRenderSuppressed()) {
+            if (!CrowBarState.shouldKeepVanillaLocatorBarDuringExternalSuppression()) {
+                ci.cancel();
+            }
+            return;
+        }
         if (CrowBarState.viewSelfEnabled) {
             ci.cancel();
             return;
@@ -59,6 +65,12 @@ public abstract class CrowBarRendererMixin {
 
     @Inject(method = "renderAddons", at = @At("HEAD"), cancellable = true)
     private void crowbar$hideLocatorAddonsInSelfView(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
+        if (CrowBarState.isExternalRenderSuppressed()) {
+            if (!CrowBarState.shouldKeepVanillaLocatorBarDuringExternalSuppression()) {
+                ci.cancel();
+            }
+            return;
+        }
         if (CrowBarState.viewSelfEnabled) {
             ci.cancel();
             return;
@@ -90,6 +102,9 @@ public abstract class CrowBarRendererMixin {
 
     @Inject(method = "renderAddons", at = @At("TAIL"))
     private void crowbar$renderLocatorAddons(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
+        if (CrowBarState.isExternalRenderSuppressed()) {
+            return;
+        }
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || client.getCameraEntity() == null) {
             return;
