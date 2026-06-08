@@ -30,7 +30,6 @@ public final class CrowBarHudRenderer {
     private static final int LOCATOR_DOT_SIZE = 9;
     private static final int LOCATOR_ARROW_WIDTH = 7;
     private static final int LOCATOR_ARROW_HEIGHT = 5;
-    private static final double LOCATOR_ARROW_MAX_DISTANCE = 48.0D;
     private static final double LOCATOR_ARROW_VERTICAL_VIEW_HALF_ANGLE = 35.0D;
     private static final double LOCATOR_VIEW_MIN_YAW = -61.0D;
     private static final double LOCATOR_VIEW_MAX_YAW = 60.0D;
@@ -89,7 +88,7 @@ public final class CrowBarHudRenderer {
             boolean markerVisible = isWithinLocatorView(relativeYaw);
             if (!markerVisible) continue;
 
-            Identifier arrowSprite = getArrowSpriteForPosition(camera, distance, alliumData.x, alliumData.y, alliumData.z);
+            Identifier arrowSprite = getArrowSpriteForPosition(camera, alliumData.x, alliumData.y, alliumData.z);
 
             int baseX = MathHelper.ceil((screenWidth - 9.0F) / 2.0F);
             int markerX = baseX + MathHelper.floor(relativeYaw * 173.0D / 2.0D / 60.0D);
@@ -191,8 +190,7 @@ public final class CrowBarHudRenderer {
         return relativeYaw > LOCATOR_VIEW_MIN_YAW && relativeYaw <= LOCATOR_VIEW_MAX_YAW;
     }
 
-    private static Identifier getArrowSpriteForPosition(Camera camera, double distance, double targetX, double targetY, double targetZ) {
-        if (distance > LOCATOR_ARROW_MAX_DISTANCE) return null;
+    private static Identifier getArrowSpriteForPosition(Camera camera, double targetX, double targetY, double targetZ) {
         double pitchDelta = getTargetPitchDelta(camera, targetX, targetY, targetZ);
         if (Math.abs(pitchDelta) <= LOCATOR_ARROW_VERTICAL_VIEW_HALF_ANGLE) return null;
         return pitchDelta < 0.0D ? LOCATOR_ARROW_UP : LOCATOR_ARROW_DOWN;
