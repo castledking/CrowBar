@@ -59,8 +59,6 @@ public final class CrowBarHudRenderer {
         Entity cameraEntity = client.getCameraEntity();
         if (cameraEntity == null) return;
 
-        if (!CrowBarState.hasRenderablePlayers(cameraEntity.getUUID())) return;
-
         Camera camera = client.gameRenderer.getMainCamera();
         Font font = client.font;
         int screenWidth = context.guiWidth();
@@ -87,19 +85,19 @@ public final class CrowBarHudRenderer {
             }
         }
 
-        if (!hasAlliumSource
-                && !hasIntegratedServerSource
-                && CrowBarState.shouldUseClientPlayerFallback()
-                && client.level != null) {
+        if (!hasAlliumSource && !hasIntegratedServerSource) {
             for (Player player : client.level.players()) {
                 UUID uuid = player.getUUID();
                 if (uuid.equals(cameraEntity.getUUID())) continue;
+                if (getPlayerInfo(uuid) == null) continue;
                 addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, player.getX(), player.getY(), player.getZ(), false);
             }
         }
 
-        int barX = (screenWidth - 182) / 2;
-        context.blitSprite(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
+        if (CrowBarState.hasAlliumDataReceived() || CrowBarState.isIntegratedServer) {
+            int barX = (screenWidth - 182) / 2;
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
+        }
 
         if (entries.isEmpty()) return;
 

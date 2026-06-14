@@ -21,6 +21,8 @@ public abstract class CrowBarRendererMixin {
             return !CrowBarState.shouldKeepVanillaLocatorBarDuringExternalSuppression();
         }
         if (CrowBarState.viewSelfEnabled) return true;
+        if (CrowBarState.hasAlliumDataReceived()) return true;
+        if (!CrowBarState.isIntegratedServer) return false;
         Entity cameraEntity = Minecraft.getInstance().getCameraEntity();
         if (cameraEntity == null) return false;
         return CrowBarState.hasRenderablePlayers(cameraEntity.getUUID());

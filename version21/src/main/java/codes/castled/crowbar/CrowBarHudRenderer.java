@@ -52,6 +52,7 @@ public final class CrowBarHudRenderer {
     public static void renderAlliumRestoredPlayers(DrawContext context, RenderTickCounter tickCounter) {
         if (CrowBarState.viewSelfEnabled) return;
         if (CrowBarState.isExternalRenderSuppressed()) return;
+        if (!CrowBarState.isIntegratedServer && !CrowBarState.alliumDataReceived) return;
 
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || client.world == null) return;
@@ -222,7 +223,6 @@ public final class CrowBarHudRenderer {
         if (alliumData != null && !alliumData.isExpired()) {
             int rgb = alliumData.teamColor & 0xFFFFFF;
             int argb = 0xFF000000 | rgb;
-            System.out.println("[CrowBar HUD] Allium color for " + uuid + ": " + Integer.toHexString(argb));
             return argb;
         }
         
@@ -232,7 +232,6 @@ public final class CrowBarHudRenderer {
             if (player != null) {
                 int teamColor = getTeamColor(player);
                 if ((teamColor & 0xFFFFFF) != 0xFFFFFF) {
-                    System.out.println("[CrowBar HUD] Client team color for " + uuid + ": " + Integer.toHexString(teamColor));
                     return teamColor;
                 }
             }
@@ -240,7 +239,6 @@ public final class CrowBarHudRenderer {
         
         // Priority 3: Mojang-ish generated fallback color
         int fallback = getMojangishGeneratedColor(uuid);
-        System.out.println("[CrowBar HUD] Fallback color for " + uuid + ": " + Integer.toHexString(fallback));
         return fallback;
     }
     

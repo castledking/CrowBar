@@ -20,6 +20,7 @@ public final class AlliumPacketHandler {
         try {
             JsonObject root = GSON.fromJson(json, JsonObject.class);
             if (root == null) return;
+            CrowBarState.alliumDataReceived = true;
             JsonArray players = root.getAsJsonArray("players");
             if (players == null) return;
 

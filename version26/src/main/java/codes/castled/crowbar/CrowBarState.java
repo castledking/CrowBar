@@ -1,6 +1,7 @@
 package codes.castled.crowbar;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
@@ -19,18 +20,31 @@ public final class CrowBarState {
 
     public static final Map<UUID, AlliumPlayerData> alliumPlayerData = new ConcurrentHashMap<>();
     private static boolean alliumDataReceived = false;
+    public static boolean isIntegratedServer = false;
 
     public static void markAlliumDataReceived() {
         alliumDataReceived = true;
     }
 
+    public static boolean hasAlliumDataReceived() {
+        return alliumDataReceived;
+    }
+
     public static void clearAlliumData() {
         alliumPlayerData.clear();
         alliumDataReceived = false;
+        isIntegratedServer = false;
     }
 
     public static boolean shouldUseClientPlayerFallback() {
-        return !alliumDataReceived;
+        return isIntegratedServer && !alliumDataReceived;
+    }
+
+    public static boolean isVanillaLocatorBarVisible() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return false;
+        ClientPacketListener connection = mc.player.connection;
+        return connection != null && connection.getWaypointManager().hasWaypoints();
     }
 
     public static Optional<Vec3> getPlayerPos(UUID uuid) {

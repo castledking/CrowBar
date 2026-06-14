@@ -57,6 +57,11 @@ public abstract class CrowBarRendererMixin {
             ci.cancel();
             return;
         }
+        if (CrowBarState.alliumDataReceived) {
+            ci.cancel();
+            return;
+        }
+        if (!CrowBarState.isIntegratedServer) return;
         Entity cameraEntity = MinecraftClient.getInstance().getCameraEntity();
         if (cameraEntity != null && CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid())) {
             ci.cancel();
@@ -75,6 +80,11 @@ public abstract class CrowBarRendererMixin {
             ci.cancel();
             return;
         }
+        if (CrowBarState.alliumDataReceived) {
+            ci.cancel();
+            return;
+        }
+        if (!CrowBarState.isIntegratedServer) return;
         Entity cameraEntity = MinecraftClient.getInstance().getCameraEntity();
         if (cameraEntity != null && CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid())) {
             ci.cancel();

@@ -70,19 +70,26 @@ public final class CrowBarClient implements ClientModInitializer {
         ));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            boolean locatorActive = CrowBarState.alliumDataReceived
+                    || CrowBarState.isIntegratedServer
+                    || CrowBarState.isVanillaLocatorBarVisible();
             while (toggleNameTags.wasPressed()) {
+                if (!locatorActive) continue;
                 CrowBarState.nameTagsEnabled = !CrowBarState.nameTagsEnabled;
                 showToggle(client, "Name tags", CrowBarState.nameTagsEnabled);
             }
             while (toggleSkins.wasPressed()) {
+                if (!locatorActive) continue;
                 CrowBarState.skinsEnabled = !CrowBarState.skinsEnabled;
                 showToggle(client, "Skins", CrowBarState.skinsEnabled);
             }
             while (toggleViewSelf.wasPressed()) {
+                if (!locatorActive) continue;
                 CrowBarState.viewSelfEnabled = !CrowBarState.viewSelfEnabled;
                 showToggle(client, "View self", CrowBarState.viewSelfEnabled);
             }
             while (toggleShowDistance.wasPressed()) {
+                if (!locatorActive) continue;
                 CrowBarState.showDistance = !CrowBarState.showDistance;
                 showToggle(client, "Show distance", CrowBarState.showDistance);
             }
@@ -90,9 +97,16 @@ public final class CrowBarClient implements ClientModInitializer {
 
         // Clear Allium data on disconnect so stale entries don't carry over
         // to LAN worlds or servers without Allium
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
-                CrowBarState.alliumPlayerData.clear()
-        );
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+                CrowBarState.alliumPlayerData.clear();
+                CrowBarState.alliumDataReceived = false;
+                CrowBarState.isIntegratedServer = client.getServer() != null;
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+                CrowBarState.alliumPlayerData.clear();
+                CrowBarState.alliumDataReceived = false;
+                CrowBarState.isIntegratedServer = false;
+        });
 
         // Note: Allium-restored player rendering is now injected via InGameHudMixin
         // before renderExperienceBar, so it renders behind the XP number.

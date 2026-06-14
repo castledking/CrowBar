@@ -1,6 +1,7 @@
 package codes.castled.crowbar;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.Vec3d;
 
@@ -18,6 +19,8 @@ public final class CrowBarState {
 
     // Storage for Allium-provided player data
     public static final Map<UUID, AlliumPlayerData> alliumPlayerData = new ConcurrentHashMap<>();
+    public static boolean alliumDataReceived = false;
+    public static boolean isIntegratedServer = false;
 
     /**
      * Get player position from the best available source:
@@ -64,6 +67,22 @@ public final class CrowBarState {
             return true;
         }
         return false;
+    }
+
+    public static boolean isVanillaLocatorBarVisible() {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player == null) return false;
+        ClientPlayNetworkHandler handler = mc.player.networkHandler;
+        if (handler == null) return false;
+        try {
+            java.lang.reflect.Field f = handler.getClass().getDeclaredField("waypointManager");
+            f.setAccessible(true);
+            Object manager = f.get(handler);
+            java.lang.reflect.Method m = manager.getClass().getMethod("hasWaypoints");
+            return (Boolean) m.invoke(manager);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public static void setExternalRenderSuppressed(String owner, boolean suppressed, boolean keepVanillaLocatorBar) {

@@ -49,31 +49,35 @@ public final class CrowBarClient implements ClientModInitializer {
         toggleShowDistance = createBinding("key.crowbar.show_distance", InputConstants.Type.KEYSYM, GLFW_KEY_X);
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            boolean locatorActive = CrowBarState.hasAlliumDataReceived()
+                    || CrowBarState.isIntegratedServer
+                    || CrowBarState.isVanillaLocatorBarVisible();
             while (toggleNameTags.consumeClick()) {
-                if (hasModifiersPressed()) continue;
+                if (hasModifiersPressed() || !locatorActive) continue;
                 CrowBarState.nameTagsEnabled = !CrowBarState.nameTagsEnabled;
                 showToggle(client, "Name tags", CrowBarState.nameTagsEnabled);
             }
             while (toggleSkins.consumeClick()) {
-                if (hasModifiersPressed()) continue;
+                if (hasModifiersPressed() || !locatorActive) continue;
                 CrowBarState.skinsEnabled = !CrowBarState.skinsEnabled;
                 showToggle(client, "Skins", CrowBarState.skinsEnabled);
             }
             while (toggleViewSelf.consumeClick()) {
-                if (hasModifiersPressed()) continue;
+                if (hasModifiersPressed() || !locatorActive) continue;
                 CrowBarState.viewSelfEnabled = !CrowBarState.viewSelfEnabled;
                 showToggle(client, "View self", CrowBarState.viewSelfEnabled);
             }
             while (toggleShowDistance.consumeClick()) {
-                if (hasModifiersPressed()) continue;
+                if (hasModifiersPressed() || !locatorActive) continue;
                 CrowBarState.showDistance = !CrowBarState.showDistance;
                 showToggle(client, "Show distance", CrowBarState.showDistance);
             }
         });
 
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) ->
-                CrowBarState.clearAlliumData()
-        );
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+                CrowBarState.clearAlliumData();
+                CrowBarState.isIntegratedServer = client.getSingleplayerServer() != null;
+        });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
                 CrowBarState.clearAlliumData()
         );
