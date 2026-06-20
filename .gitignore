@@ -6,4 +6,5 @@ out/
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
 .release/old/
+.release/plans/
 bin/
