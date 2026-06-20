@@ -11,6 +11,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class CrowBarState {
+    private static final long XP_BAR_VISIBLE_DURATION_MS = 5000;
+
     public static boolean nameTagsEnabled = true;
     public static boolean skinsEnabled = true;
     public static boolean viewSelfEnabled = false;
@@ -21,6 +23,10 @@ public final class CrowBarState {
     public static final Map<UUID, AlliumPlayerData> alliumPlayerData = new ConcurrentHashMap<>();
     public static boolean alliumDataReceived = false;
     public static boolean isIntegratedServer = false;
+
+    private static int lastExperienceLevel = -1;
+    private static float lastExperienceProgress = -1f;
+    private static long xpGainShowUntil = 0;
 
     /**
      * Get player position from the best available source:
@@ -101,6 +107,26 @@ public final class CrowBarState {
     public static boolean shouldKeepVanillaLocatorBarDuringExternalSuppression() {
         if (externalRenderSuppressions.isEmpty()) return true;
         return externalRenderSuppressions.values().stream().allMatch(Boolean::booleanValue);
+    }
+
+    public static void checkXpGain(net.minecraft.entity.player.PlayerEntity player) {
+        if (player == null) return;
+
+        int currentLevel = player.experienceLevel;
+        float currentProgress = player.experienceProgress;
+
+        if (lastExperienceLevel >= 0 && lastExperienceProgress >= 0) {
+            if (currentLevel != lastExperienceLevel || currentProgress > lastExperienceProgress) {
+                xpGainShowUntil = System.currentTimeMillis() + XP_BAR_VISIBLE_DURATION_MS;
+            }
+        }
+
+        lastExperienceLevel = currentLevel;
+        lastExperienceProgress = currentProgress;
+    }
+
+    public static boolean isXpBarVisible() {
+        return System.currentTimeMillis() < xpGainShowUntil;
     }
 
     private CrowBarState() {

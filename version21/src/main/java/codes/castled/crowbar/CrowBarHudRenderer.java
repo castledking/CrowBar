@@ -105,10 +105,13 @@ public final class CrowBarHudRenderer {
         }
 
         // Draw background (always, even if no entries are in view)
-        int barX = (screenWidth - 182) / 2;
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
+        if (!CrowBarState.isXpBarVisible()) {
+            int barX = (screenWidth - 182) / 2;
+            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
+        }
 
         if (entries.isEmpty()) return;
+        if (CrowBarState.isXpBarVisible()) return;
 
         // Find the entry closest to screen center
         EntryRenderData closest = entries.stream()

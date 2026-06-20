@@ -17,6 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LocatorBarRenderer.class)
 public abstract class CrowBarRendererMixin {
     private static boolean shouldCancelLocatorBar() {
+        if (CrowBarState.isXpBarVisible()) return false;
         if (CrowBarState.isExternalRenderSuppressed()) {
             return !CrowBarState.shouldKeepVanillaLocatorBarDuringExternalSuppression();
         }

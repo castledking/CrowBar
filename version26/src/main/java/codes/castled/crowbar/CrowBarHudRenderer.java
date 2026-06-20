@@ -86,6 +86,7 @@ public final class CrowBarHudRenderer {
         }
 
         if (!hasAlliumSource && !hasIntegratedServerSource) {
+            if (!CrowBarState.isVanillaLocatorBarVisible()) return;
             for (Player player : client.level.players()) {
                 UUID uuid = player.getUUID();
                 if (uuid.equals(cameraEntity.getUUID())) continue;
@@ -94,10 +95,12 @@ public final class CrowBarHudRenderer {
             }
         }
 
-        if (CrowBarState.hasAlliumDataReceived() || CrowBarState.isIntegratedServer) {
+        if ((CrowBarState.hasAlliumDataReceived() || CrowBarState.isIntegratedServer) && !CrowBarState.isXpBarVisible()) {
             int barX = (screenWidth - 182) / 2;
             context.blitSprite(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
         }
+
+        if (CrowBarState.isXpBarVisible()) return;
 
         if (entries.isEmpty()) return;
 
