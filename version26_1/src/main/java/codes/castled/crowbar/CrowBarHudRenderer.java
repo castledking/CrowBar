@@ -59,7 +59,7 @@ public final class CrowBarHudRenderer {
         Entity cameraEntity = client.getCameraEntity();
         if (cameraEntity == null) return;
 
-        Camera camera = client.gameRenderer.mainCamera();
+        Camera camera = client.gameRenderer.getMainCamera();
         Font font = client.font;
         int screenWidth = context.guiWidth();
         int screenHeight = context.guiHeight();
@@ -303,9 +303,18 @@ public final class CrowBarHudRenderer {
             return 0xFFFFFFFF;
         }
 
-        return 0xFF000000 | team.getColor()
-                .map(net.minecraft.world.scores.TeamColor::rgb)
-                .orElse(0xFFFFFF);
+        net.minecraft.ChatFormatting color = team.getColor();
+
+        if (color == null) {
+            return 0xFFFFFFFF;
+        }
+
+        Integer colorValue = color.getColor();
+        if (colorValue == null) {
+            return 0xFFFFFFFF;
+        }
+
+        return 0xFF000000 | colorValue;
     }
 
     private static int calculateSizeFromDistance(float distance, int baseSize) {

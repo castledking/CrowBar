@@ -29,7 +29,6 @@ dependencies {
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
     compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
-    runtimeOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 }
 
 processResources {
@@ -38,6 +37,7 @@ processResources {
     inputs.property "minecraft_dependency", project.minecraft_dependency
     inputs.property "loader_version", project.loader_version
     inputs.property "fabric_api_version", project.fabric_api_version
+    inputs.property "fabric_api_minimum", project.fabric_api_minimum
 
     filesMatching("fabric.mod.json") {
         expand(
@@ -45,7 +45,8 @@ processResources {
                 "minecraft_version": project.minecraft_version,
                 "minecraft_dependency": project.minecraft_dependency,
                 "loader_version": project.loader_version,
-                "fabric_api_version": project.fabric_api_version
+                "fabric_api_version": project.fabric_api_version,
+                "fabric_api_minimum": project.fabric_api_minimum
         )
     }
 }

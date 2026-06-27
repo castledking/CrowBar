@@ -6,7 +6,7 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.contextualbar.LocatorBar;
+import net.minecraft.client.gui.contextualbar.LocatorBarRenderer;
 import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Environment(EnvType.CLIENT)
-@Mixin(LocatorBar.class)
+@Mixin(LocatorBarRenderer.class)
 public abstract class CrowBarRendererMixin {
     private static boolean shouldCancelLocatorBar() {
         if (CrowBarState.isXpBarVisible()) return false;

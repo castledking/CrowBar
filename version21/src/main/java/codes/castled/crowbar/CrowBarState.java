@@ -77,8 +77,7 @@ public final class CrowBarState {
 
     public static boolean isVanillaLocatorBarVisible() {
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null) return false;
-        ClientPlayNetworkHandler handler = mc.player.networkHandler;
+        ClientPlayNetworkHandler handler = mc.getNetworkHandler();
         if (handler == null) return false;
         try {
             java.lang.reflect.Field f = handler.getClass().getDeclaredField("waypointManager");

@@ -68,7 +68,7 @@ public final class CrowBarConfigScreen extends Screen {
     @Override
     public void onClose() {
         if (minecraft != null) {
-            minecraft.setScreenAndShow(parent);
+            minecraft.setScreen(parent);
         }
     }
 

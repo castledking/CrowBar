@@ -7,7 +7,7 @@
   <a href="https://castled.codes"><img alt="CASTLED CODEX" src="https://castled.codes/assets/logo-banner.png" width="140" height="35"></a>
 </p>
 
-CrowBar is a Fabric client mod for Minecraft 1.21.6-1.21.11 and 26.1.x that extends the locator bar with readable player name tags, skin markers, distance text, team-colored dots, and a self-view capture mode.
+CrowBar is a Fabric client mod for Minecraft 1.21.6-1.21.11, 26.1.x, and 26.2 that extends the locator bar with readable player name tags, skin markers, distance text, team-colored dots, and a self-view capture mode.
 
 ## Features
 
@@ -38,6 +38,7 @@ Use the jar that matches your Minecraft line:
 
 - `CrowBar-1.21.x`: Minecraft 1.21.6-1.21.11, Java 21, Fabric Loader 0.18.4 or newer, Fabric API 0.141.4 or newer.
 - `CrowBar-26.1.x`: Minecraft 26.1.x, Java 25, Fabric Loader 0.19.2 or newer, Fabric API 0.150.0 or newer.
+- `CrowBar-26.x`: Minecraft 26.2, Java 25, Fabric Loader 0.19.3 or newer, Fabric API 0.152.2 or newer.
 
 Mod Menu is optional, but recommended for the config screen.
 
@@ -62,10 +63,10 @@ Keybinds can be changed from Minecraft's controls menu under the CrowBar categor
 ## Building
 
 ```bash
-./gradlew :version21:build :version26:build
+./gradlew :version21:build :version26_1:build :version26:build
 ```
 
-The built jars are written to `version21/build/libs/` and `version26/build/libs/`.
+The built jars are written to `version21/build/libs/`, `version26_1/build/libs/`, and `version26/build/libs/`.
 
 ## Links
 

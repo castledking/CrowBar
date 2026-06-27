@@ -48,7 +48,8 @@ public final class CrowBarState {
 
     public static boolean isVanillaLocatorBarVisible() {
         Minecraft mc = Minecraft.getInstance();
-        ClientPacketListener connection = mc.getConnection();
+        if (mc.player == null) return false;
+        ClientPacketListener connection = mc.player.connection;
         return connection != null && connection.getWaypointManager().hasWaypoints();
     }
 
