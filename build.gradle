@@ -1,5 +1,5 @@
 // Root build file - all configuration lives in subproject build files.
-// Use `gradlew :version21:build :version26:build` to build both supported version jars.
+// Use `gradlew :version21:build :version26_1:build :version26_2:build` to build all three supported version jars.
 
 subprojects {
     tasks.matching { it.name == "build" || it.name == "clean" }.configureEach {

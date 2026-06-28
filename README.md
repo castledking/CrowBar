@@ -63,10 +63,10 @@ Keybinds can be changed from Minecraft's controls menu under the CrowBar categor
 ## Building
 
 ```bash
-./gradlew :version21:build :version26_1:build :version26:build
+./gradlew :version21:build :version26_1:build :version26_2:build
 ```
 
-The built jars are written to `version21/build/libs/`, `version26_1/build/libs/`, and `version26/build/libs/`.
+The built jars are written to `version21/build/libs/`, `version26_1/build/libs/`, and `version26_2/build/libs/`.
 
 ## Links
 

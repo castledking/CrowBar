@@ -18,5 +18,5 @@ dependencyResolutionManagement {
 rootProject.name = "CrowBar"
 include "common"
 include "version21"
-include "version26"
+include "version26_2"
 include "version26_1"

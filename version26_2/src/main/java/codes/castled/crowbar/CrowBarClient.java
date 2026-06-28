@@ -53,22 +53,22 @@ public final class CrowBarClient implements ClientModInitializer {
                     || CrowBarState.isIntegratedServer
                     || CrowBarState.isVanillaLocatorBarVisible();
             while (toggleNameTags.consumeClick()) {
-                if (!locatorActive) continue;
+                if (shouldSkipKeybind(toggleNameTags) || !locatorActive) continue;
                 CrowBarState.nameTagsEnabled = !CrowBarState.nameTagsEnabled;
                 showToggle(client, "Name tags", CrowBarState.nameTagsEnabled);
             }
             while (toggleSkins.consumeClick()) {
-                if (!locatorActive) continue;
+                if (shouldSkipKeybind(toggleSkins) || !locatorActive) continue;
                 CrowBarState.skinsEnabled = !CrowBarState.skinsEnabled;
                 showToggle(client, "Skins", CrowBarState.skinsEnabled);
             }
             while (toggleViewSelf.consumeClick()) {
-                if (!locatorActive) continue;
+                if (shouldSkipKeybind(toggleViewSelf) || !locatorActive) continue;
                 CrowBarState.viewSelfEnabled = !CrowBarState.viewSelfEnabled;
                 showToggle(client, "View self", CrowBarState.viewSelfEnabled);
             }
             while (toggleShowDistance.consumeClick()) {
-                if (!locatorActive) continue;
+                if (shouldSkipKeybind(toggleShowDistance) || !locatorActive) continue;
                 CrowBarState.showDistance = !CrowBarState.showDistance;
                 showToggle(client, "Show distance", CrowBarState.showDistance);
             }
@@ -81,6 +81,35 @@ public final class CrowBarClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
                 CrowBarState.clearAlliumData()
         );
+    }
+
+    private static boolean hasModifiersPressed() {
+        long window = Minecraft.getInstance().getWindow().handle();
+        return glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS
+                || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS
+                || glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS
+                || glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS
+                || glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS
+                || glfwGetKey(window, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS
+                || glfwGetKey(window, GLFW_KEY_LEFT_SUPER) == GLFW_PRESS
+                || glfwGetKey(window, GLFW_KEY_RIGHT_SUPER) == GLFW_PRESS;
+    }
+
+    private static boolean hasBoundModifiers(KeyMapping mapping) {
+        try {
+            Class<?> apiClass = Class.forName("de.siphalor.amecs.key_modifiers.api.AmecsKeyModifiersApi");
+            Object modifiers = apiClass.getMethod("getBoundModifiers", KeyMapping.class).invoke(null, mapping);
+            return !((Boolean) modifiers.getClass().getMethod("isUnset").invoke(modifiers));
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private static boolean shouldSkipKeybind(KeyMapping mapping) {
+        if (hasBoundModifiers(mapping)) {
+            return false;
+        }
+        return hasModifiersPressed();
     }
 
     private static KeyMapping createBinding(String id, InputConstants.Type type, int code) {

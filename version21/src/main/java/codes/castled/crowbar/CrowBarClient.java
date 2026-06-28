@@ -11,6 +11,7 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
+import org.lwjgl.glfw.GLFW;
 
 import java.nio.charset.StandardCharsets;
 
@@ -74,22 +75,22 @@ public final class CrowBarClient implements ClientModInitializer {
                     || CrowBarState.isIntegratedServer
                     || CrowBarState.isVanillaLocatorBarVisible();
             while (toggleNameTags.wasPressed()) {
-                if (!locatorActive) continue;
+                if (hasModifiersPressed() || !locatorActive) continue;
                 CrowBarState.nameTagsEnabled = !CrowBarState.nameTagsEnabled;
                 showToggle(client, "Name tags", CrowBarState.nameTagsEnabled);
             }
             while (toggleSkins.wasPressed()) {
-                if (!locatorActive) continue;
+                if (hasModifiersPressed() || !locatorActive) continue;
                 CrowBarState.skinsEnabled = !CrowBarState.skinsEnabled;
                 showToggle(client, "Skins", CrowBarState.skinsEnabled);
             }
             while (toggleViewSelf.wasPressed()) {
-                if (!locatorActive) continue;
+                if (hasModifiersPressed() || !locatorActive) continue;
                 CrowBarState.viewSelfEnabled = !CrowBarState.viewSelfEnabled;
                 showToggle(client, "View self", CrowBarState.viewSelfEnabled);
             }
             while (toggleShowDistance.wasPressed()) {
-                if (!locatorActive) continue;
+                if (hasModifiersPressed() || !locatorActive) continue;
                 CrowBarState.showDistance = !CrowBarState.showDistance;
                 showToggle(client, "Show distance", CrowBarState.showDistance);
             }
@@ -110,6 +111,18 @@ public final class CrowBarClient implements ClientModInitializer {
 
         // Note: Allium-restored player rendering is now injected via InGameHudMixin
         // before renderExperienceBar, so it renders behind the XP number.
+    }
+
+    private static boolean hasModifiersPressed() {
+        long window = net.minecraft.client.MinecraftClient.getInstance().getWindow().getHandle();
+        return GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_ALT) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_ALT) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SUPER) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SUPER) == GLFW.GLFW_PRESS;
     }
 
     private static void showToggle(net.minecraft.client.MinecraftClient client, String label, boolean enabled) {
