@@ -27,7 +27,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build
-        run: ./gradlew :version21:build :version26:build --no-daemon
+        run: ./gradlew :version21:build :version26_1:build :version26_2:build --no-daemon
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -35,4 +35,5 @@ jobs:
           name: crowbar-artifacts
           path: |
             version21/build/libs/*.jar
-            version26/build/libs/*.jar
+            version26_1/build/libs/*.jar
+            version26_2/build/libs/*.jar

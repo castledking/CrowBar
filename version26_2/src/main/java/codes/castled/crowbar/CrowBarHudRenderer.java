@@ -95,7 +95,9 @@ public final class CrowBarHudRenderer {
             }
         }
 
-        if ((CrowBarState.hasAlliumDataReceived() || CrowBarState.isIntegratedServer) && !CrowBarState.isXpBarVisible()) {
+        if ((CrowBarState.hasAlliumDataReceived() || CrowBarState.isIntegratedServer)
+                && CrowBarState.hasRenderablePlayers(client.player.getUUID())
+                && !CrowBarState.isXpBarVisible()) {
             int barX = (screenWidth - 182) / 2;
             context.blitSprite(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
         }
