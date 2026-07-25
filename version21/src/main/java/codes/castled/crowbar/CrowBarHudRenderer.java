@@ -17,6 +17,8 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.network.ClientPlayNetworkHandler;
+import net.minecraft.util.math.ColorHelper;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -44,6 +46,9 @@ public final class CrowBarHudRenderer {
     
     // Golden angle (≈137.508°) — matches Allium server's fallback color generator.
     // Ensures a player gets the same hue from both server and client fallback paths.
+    /** Vanilla's bowtie sprite, so a server resource pack can restyle it for everyone at once. */
+    private static final Identifier CLAIM_BOWTIE_SPRITE = Identifier.ofVanilla("hud/locator_bar_dot/bowtie");
+
     private static final float GOLDEN_ANGLE = 137.508f;
 
     private CrowBarHudRenderer() {
@@ -52,7 +57,8 @@ public final class CrowBarHudRenderer {
     public static void renderAlliumRestoredPlayers(DrawContext context, RenderTickCounter tickCounter) {
         if (CrowBarState.viewSelfEnabled) return;
         if (CrowBarState.isExternalRenderSuppressed()) return;
-        if (!CrowBarState.isIntegratedServer && !CrowBarState.alliumDataReceived) return;
+        boolean hasClaims = !CrowBarState.getClaimWaypoints().isEmpty();
+        if (!CrowBarState.isIntegratedServer && !CrowBarState.alliumDataReceived && !hasClaims) return;
 
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || client.world == null) return;
@@ -60,7 +66,7 @@ public final class CrowBarHudRenderer {
         Entity cameraEntity = client.getCameraEntity();
         if (cameraEntity == null) return;
 
-        if (!CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid())) return;
+        if (!hasClaims && !CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid())) return;
 
         Camera camera = client.gameRenderer.getCamera();
         TextRenderer textRenderer = client.textRenderer;
@@ -101,8 +107,10 @@ public final class CrowBarHudRenderer {
             int dotCenterY = markerY + 4;
             Identifier dotSprite = getDotSpriteForDistance(distance);
 
-            entries.add(new EntryRenderData(uuid, markerX, dotCenterX, dotCenterY, size, distance, dotSprite, arrowSprite, markerVisible));
+            entries.add(new EntryRenderData(uuid, markerX, dotCenterX, dotCenterY, size, distance, dotSprite, arrowSprite, markerVisible, true, null, null));
         }
+
+        addClaimWaypointEntries(cameraEntity, camera, screenWidth, locatorBarY, entries);
 
         // Draw background (always, even if no entries are in view)
         if (!CrowBarState.isXpBarVisible()) {
@@ -131,16 +139,53 @@ public final class CrowBarHudRenderer {
         }
     }
 
+    /**
+     * Adds claims the server published for this player.
+     *
+     * <p>Independent of the vanilla waypoint system: positions arrive over a plugin channel from the
+     * server's claim records, so a claim renders at any distance and whether or not its terrain is
+     * loaded. The bowtie is drawn at full size regardless of distance, since a claim marker that
+     * degrades into a generic dot is indistinguishable from a player.
+     */
+    private static void addClaimWaypointEntries(Entity cameraEntity, Camera camera, int screenWidth, int locatorBarY, List<EntryRenderData> entries) {
+        for (ClaimWaypointData claim : CrowBarState.getClaimWaypoints()) {
+            double deltaX = claim.x() - cameraEntity.getX();
+            double deltaZ = claim.z() - cameraEntity.getZ();
+            double yaw = Math.toDegrees(Math.atan2(deltaZ, deltaX)) - 90.0;
+            yaw = (yaw + 360.0) % 360.0;
+
+            double relativeYaw = yaw - camera.getYaw();
+            while (relativeYaw < -180) relativeYaw += 360;
+            while (relativeYaw > 180) relativeYaw -= 360;
+            if (!isWithinLocatorView(relativeYaw)) continue;
+
+            double deltaY = claim.y() - cameraEntity.getY();
+            double distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+
+            int baseX = MathHelper.ceil((screenWidth - 9.0F) / 2.0F);
+            int markerX = baseX + MathHelper.floor(relativeYaw * 173.0D / 2.0D / 60.0D);
+            int markerY = locatorBarY - 2;
+
+            int color = claim.color() != null
+                    ? claim.color()
+                    : ColorHelper.withBrightness(ColorHelper.withAlpha(255, claim.id().hashCode()), 0.9F);
+
+            entries.add(new EntryRenderData(null, markerX, markerX + 4, markerY + 4, 9, distance,
+                    CLAIM_BOWTIE_SPRITE, getArrowSpriteForPosition(camera, claim.x(), claim.y(), claim.z()),
+                    true, false, color, claim.name()));
+        }
+    }
+
     private static void renderAlliumEntry(DrawContext context, TextRenderer textRenderer, EntryRenderData entry, boolean isClosest) {
         if (entry.markerVisible) {
-            int dotColor = getDotColor(entry.uuid);
+            int dotColor = entry.overrideColor != null ? entry.overrideColor : getDotColor(entry.uuid);
             drawTintedLocatorDot(context, entry.dotCenterX, entry.dotCenterY, entry.dotSprite, dotColor);
         }
         if (entry.arrowSprite != null) {
             drawVerticalArrow(context, entry.dotCenterX, entry.dotCenterY, entry.arrowSprite);
         }
 
-        if (entry.markerVisible && CrowBarState.skinsEnabled) {
+        if (entry.markerVisible && entry.isPlayer && CrowBarState.skinsEnabled) {
             SkinTextures skin = getSkin(entry.uuid);
             if (skin != null) {
                 PlayerSkinDrawer.draw(context, skin, entry.dotCenterX - entry.size / 2, entry.dotCenterY - entry.size / 2, entry.size);
@@ -150,7 +195,9 @@ public final class CrowBarHudRenderer {
         if (entry.markerVisible && (CrowBarState.nameTagsEnabled || CrowBarState.showDistance)) {
             String text = "";
             if (CrowBarState.nameTagsEnabled) {
-                text = getName(entry.uuid);
+                // Players resolve through the tab list; claims carry their name in the entry.
+                String name = entry.isPlayer ? getName(entry.uuid) : entry.label;
+                text = name == null ? "" : name;
             }
             if (CrowBarState.showDistance && entry.distance > 0) {
                 String distanceText = String.format("%.0fm", entry.distance);
@@ -172,7 +219,18 @@ public final class CrowBarHudRenderer {
         }
     }
 
-    private record EntryRenderData(UUID uuid, int markerX, int dotCenterX, int dotCenterY, int size, double distance, Identifier dotSprite, Identifier arrowSprite, boolean markerVisible) {
+    /**
+     * A single marker on the bar.
+     *
+     * <p>{@code isPlayer} entries come from a player position source and support skin and name-tag
+     * overlays. Non-player entries are claims or vanilla waypoints; they carry their own colour and
+     * label and have no skin to look up.
+     *
+     * @param uuid          {@code null} for claims, which are identified by claim id
+     * @param overrideColor pre-resolved ARGB, or {@code null} to derive one from {@code uuid}
+     * @param label         text to draw above the marker; players resolve their own from the tab list
+     */
+    private record EntryRenderData(UUID uuid, int markerX, int dotCenterX, int dotCenterY, int size, double distance, Identifier dotSprite, Identifier arrowSprite, boolean markerVisible, boolean isPlayer, Integer overrideColor, String label) {
     }
 
     private static void drawTintedLocatorDot(DrawContext context, int centerX, int centerY, Identifier sprite, int color) {

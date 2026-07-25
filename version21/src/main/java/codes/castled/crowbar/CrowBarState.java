@@ -22,6 +22,59 @@ public final class CrowBarState {
     // Storage for Allium-provided player data
     public static final Map<UUID, AlliumPlayerData> alliumPlayerData = new ConcurrentHashMap<>();
     public static boolean alliumDataReceived = false;
+
+    /** Claims this player may see, from GPExpansion. Empty without the server plugin. */
+    private static volatile java.util.List<ClaimWaypointData> claimWaypoints = java.util.List.of();
+    /**
+     * Marker entities backing those claims. Their vanilla waypoints are suppressed so a claim is
+     * not drawn twice when the server also spawns marker entities for unmodified clients.
+     */
+    private static volatile java.util.Set<UUID> claimMarkerIds = java.util.Set.of();
+
+    /** Which claims the locator bar shows. Cycled by the claim waypoint keybind. */
+    public enum ClaimWaypointMode { OFF, OWNED, TRUSTED }
+
+    public static volatile ClaimWaypointMode claimWaypointMode = ClaimWaypointMode.TRUSTED;
+    private static volatile boolean claimDataReceived = false;
+
+    /** True once GPExpansion has sent anything, which is how the keybind knows it is useful. */
+    public static boolean hasClaimDataReceived() {
+        return claimDataReceived;
+    }
+
+    /** Advances OFF to OWNED to TRUSTED and back to OFF. */
+    public static ClaimWaypointMode cycleClaimWaypointMode() {
+        claimWaypointMode = switch (claimWaypointMode) {
+            case OFF -> ClaimWaypointMode.OWNED;
+            case OWNED -> ClaimWaypointMode.TRUSTED;
+            case TRUSTED -> ClaimWaypointMode.OFF;
+        };
+        return claimWaypointMode;
+    }
+
+    public static void setClaimWaypoints(java.util.List<ClaimWaypointData> claims, java.util.Set<UUID> markerIds) {
+        claimDataReceived = true;
+        claimWaypoints = java.util.List.copyOf(claims);
+        claimMarkerIds = java.util.Set.copyOf(markerIds);
+    }
+
+    /** Claims to draw, already filtered by the current mode. */
+    public static java.util.List<ClaimWaypointData> getClaimWaypoints() {
+        return switch (claimWaypointMode) {
+            case OFF -> java.util.List.of();
+            case OWNED -> claimWaypoints.stream().filter(ClaimWaypointData::owned).toList();
+            case TRUSTED -> claimWaypoints;
+        };
+    }
+
+    public static boolean isClaimMarker(UUID uuid) {
+        return uuid != null && claimMarkerIds.contains(uuid);
+    }
+
+    public static void clearClaimWaypoints() {
+        claimWaypoints = java.util.List.of();
+        claimMarkerIds = java.util.Set.of();
+    }
     public static boolean isIntegratedServer = false;
 
     private static int lastExperienceLevel = -1;

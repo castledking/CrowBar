@@ -3,6 +3,7 @@ package codes.castled.crowbar;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
@@ -21,6 +22,53 @@ public final class CrowBarState {
     private static final Map<String, Boolean> externalRenderSuppressions = new ConcurrentHashMap<>();
 
     public static final Map<UUID, AlliumPlayerData> alliumPlayerData = new ConcurrentHashMap<>();
+    /** Claims this player may see, from GPExpansion. Empty without the server plugin. */
+    private static volatile java.util.List<ClaimWaypointData> claimWaypoints = java.util.List.of();
+    /**
+     * Marker entities backing those claims. Their vanilla waypoints are suppressed so a claim is
+     * not drawn twice when the server also spawns marker entities for unmodified clients.
+     */
+    private static volatile java.util.Set<UUID> claimMarkerIds = java.util.Set.of();
+
+    /** Which claims the locator bar shows. Cycled by the claim waypoint keybind. */
+    public enum ClaimWaypointMode { OFF, OWNED, TRUSTED }
+
+    public static volatile ClaimWaypointMode claimWaypointMode = ClaimWaypointMode.TRUSTED;
+    private static volatile boolean claimDataReceived = false;
+
+    /** True once GPExpansion has sent anything, which is how the keybind knows it is useful. */
+    public static boolean hasClaimDataReceived() {
+        return claimDataReceived;
+    }
+
+    /** Advances OFF to OWNED to TRUSTED and back to OFF. */
+    public static ClaimWaypointMode cycleClaimWaypointMode() {
+        claimWaypointMode = switch (claimWaypointMode) {
+            case OFF -> ClaimWaypointMode.OWNED;
+            case OWNED -> ClaimWaypointMode.TRUSTED;
+            case TRUSTED -> ClaimWaypointMode.OFF;
+        };
+        return claimWaypointMode;
+    }
+
+    public static void setClaimWaypoints(java.util.List<ClaimWaypointData> claims, java.util.Set<UUID> markerIds) {
+        claimDataReceived = true;
+        claimWaypoints = java.util.List.copyOf(claims);
+        claimMarkerIds = java.util.Set.copyOf(markerIds);
+    }
+
+    /** Claims to draw, already filtered by the current mode. */
+    public static java.util.List<ClaimWaypointData> getClaimWaypoints() {
+        return switch (claimWaypointMode) {
+            case OFF -> java.util.List.of();
+            case OWNED -> claimWaypoints.stream().filter(ClaimWaypointData::owned).toList();
+            case TRUSTED -> claimWaypoints;
+        };
+    }
+
+    public static boolean isClaimMarker(UUID uuid) {
+        return uuid != null && claimMarkerIds.contains(uuid);
+    }
     private static boolean alliumDataReceived = false;
     public static boolean isIntegratedServer = false;
 
@@ -38,6 +86,8 @@ public final class CrowBarState {
 
     public static void clearAlliumData() {
         alliumPlayerData.clear();
+        claimWaypoints = java.util.List.of();
+        claimMarkerIds = java.util.Set.of();
         alliumDataReceived = false;
         isIntegratedServer = false;
     }
@@ -51,6 +101,27 @@ public final class CrowBarState {
         if (mc.player == null) return false;
         ClientPacketListener connection = mc.player.connection;
         return connection != null && connection.getWaypointManager().hasWaypoints();
+    }
+
+    /**
+     * Whether CrowBar draws the locator bar instead of vanilla.
+     *
+     * <p>Single source of truth for both {@code CrowBarRendererMixin} (which cancels the vanilla
+     * render) and {@code CrowBarHudRenderer} (which must then take over rendering the vanilla
+     * waypoints vanilla would have drawn). Keeping one predicate stops the two from drifting and
+     * either double-drawing or dropping waypoints entirely.
+     */
+    public static boolean shouldCancelVanillaLocatorBar() {
+        if (isXpBarVisible()) return false;
+        if (isExternalRenderSuppressed()) {
+            return !shouldKeepVanillaLocatorBarDuringExternalSuppression();
+        }
+        if (viewSelfEnabled) return true;
+        if (hasAlliumDataReceived()) return true;
+        if (!isIntegratedServer) return false;
+        Entity cameraEntity = Minecraft.getInstance().getCameraEntity();
+        if (cameraEntity == null) return false;
+        return hasRenderablePlayers(cameraEntity.getUUID());
     }
 
     public static Optional<Vec3> getPlayerPos(UUID uuid) {

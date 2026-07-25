@@ -11,14 +11,22 @@ import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.entity.player.AvatarRenderer;
+import net.minecraft.client.resources.WaypointStyle;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
+import net.minecraft.world.TickRateManager;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.player.PlayerSkin;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.PlayerTeam;
+import net.minecraft.world.waypoints.PartialTickSupplier;
+import net.minecraft.world.waypoints.TrackedWaypoint;
+import net.minecraft.world.waypoints.Waypoint;
+import net.minecraft.world.waypoints.WaypointStyleAssets;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -44,9 +52,41 @@ public final class CrowBarHudRenderer {
             Identifier.fromNamespaceAndPath("crowbar", "hud/locator_bar_dot/default_3")
     };
 
+    /** Vanilla's bowtie sprite, so a server resource pack can restyle it for everyone at once. */
+    private static final Identifier CLAIM_BOWTIE_SPRITE =
+            Identifier.withDefaultNamespace("hud/locator_bar_dot/bowtie");
+
     private static final float GOLDEN_ANGLE = 137.508f;
 
     private CrowBarHudRenderer() {
+    }
+
+    /**
+     * Draws CrowBar's replacement bar background.
+     *
+     * <p>Separate from the markers because the two belong on opposite sides of the experience
+     * level in vanilla's extraction order: the background must go under the level number, while
+     * the markers must go over vanilla's own dots, which are extracted after it.
+     */
+    public static void renderLocatorBarBackground(GuiGraphicsExtractor context, DeltaTracker tickCounter) {
+        if (CrowBarState.viewSelfEnabled) return;
+        if (CrowBarState.isExternalRenderSuppressed()) return;
+        if (CrowBarState.isXpBarVisible()) return;
+
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null) return;
+        if (!CrowBarState.hasAlliumDataReceived() && !CrowBarState.isIntegratedServer) return;
+
+        // Markers alone are enough to warrant a bar: a claim with nobody else online still needs a
+        // background to sit on.
+        boolean hasBarContent = CrowBarState.hasRenderablePlayers(client.player.getUUID())
+                || !CrowBarState.getClaimWaypoints().isEmpty()
+                || (CrowBarState.shouldCancelVanillaLocatorBar() && CrowBarState.isVanillaLocatorBarVisible());
+        if (!hasBarContent) return;
+
+        int barX = (context.guiWidth() - 182) / 2;
+        int locatorBarY = context.guiHeight() - 29;
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
     }
 
     public static void renderLocatorBarPlayers(GuiGraphicsExtractor context, DeltaTracker tickCounter) {
@@ -95,12 +135,12 @@ public final class CrowBarHudRenderer {
             }
         }
 
-        if ((CrowBarState.hasAlliumDataReceived() || CrowBarState.isIntegratedServer)
-                && CrowBarState.hasRenderablePlayers(client.player.getUUID())
-                && !CrowBarState.isXpBarVisible()) {
-            int barX = (screenWidth - 182) / 2;
-            context.blitSprite(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
+        // Vanilla waypoints are ours to draw only when we cancelled the vanilla bar.
+        boolean crowbarOwnsBar = CrowBarState.shouldCancelVanillaLocatorBar();
+        if (crowbarOwnsBar) {
+            addVanillaWaypointEntries(client, cameraEntity, camera, tickCounter, screenWidth, locatorBarY, entries);
         }
+        addClaimWaypointEntries(cameraEntity, camera, screenWidth, locatorBarY, entries);
 
         if (CrowBarState.isXpBarVisible()) return;
 
@@ -175,12 +215,147 @@ public final class CrowBarHudRenderer {
         int dotCenterY = markerY + 4;
         Identifier dotSprite = getDotSpriteForDistance(distance);
 
-        entries.add(new EntryRenderData(uuid, markerX, dotCenterX, dotCenterY, size, distance, dotSprite, arrowSprite, markerVisible));
+        entries.add(new EntryRenderData(uuid, markerX, dotCenterX, dotCenterY, size, distance, dotSprite, arrowSprite, markerVisible, true, null, null));
+    }
+
+    /**
+     * Adds the server's vanilla waypoints to the bar.
+     *
+     * <p>Only called when CrowBar has cancelled the vanilla locator bar. Vanilla would otherwise
+     * have drawn these itself, so calling it while vanilla still renders would double-draw every
+     * dot. Mirrors {@code LocatorBar#extractRenderState} so styles, colours and distance-based
+     * sprite selection stay identical to vanilla, including datapack-defined waypoint styles.
+     *
+     * <p>Players are skipped: they already arrive through a position source that supports skins and
+     * name tags, and rendering both would stack two dots on the same player.
+     */
+    private static void addVanillaWaypointEntries(Minecraft client, Entity cameraEntity, Camera camera, DeltaTracker tickCounter, int screenWidth, int locatorBarY, List<EntryRenderData> entries) {
+        ClientPacketListener connection = client.getConnection();
+        if (connection == null) return;
+
+        Level level = cameraEntity.level();
+        TickRateManager tickRateManager = level.tickRateManager();
+        PartialTickSupplier partialTickSupplier = entity -> tickCounter.getGameTimeDeltaPartialTick(!tickRateManager.isEntityFrozen(entity));
+
+        int[] seen = {0, 0};
+        connection.getWaypointManager().forEachWaypoint(cameraEntity, waypoint -> {
+            seen[0]++;
+            UUID uuid = waypoint.id().left().orElse(null);
+            if (uuid != null && uuid.equals(cameraEntity.getUUID())) return;
+            if (uuid != null && getPlayerInfo(uuid) != null) return;
+            // Claim markers are drawn from claim data instead, which carries the name and works at
+            // any distance; rendering the entity's waypoint too would stack two dots.
+            if (CrowBarState.isClaimMarker(uuid)) return;
+            seen[1]++;
+            logWaypointDiagnostics(waypoint, cameraEntity);
+
+            double relativeYaw = waypoint.yawAngleToCamera(level, camera, partialTickSupplier);
+            if (!isWithinLocatorView(relativeYaw)) return;
+
+            // Beyond 332 blocks the server sends bearing only and distanceSquared() is infinite.
+            // WaypointStyle#sprite handles that by falling through to its farthest sprite, but the
+            // size ramp and the distance label would both produce nonsense, so clamp them instead.
+            double distanceSquared = waypoint.distanceSquared(cameraEntity);
+            float spriteDistance = Mth.sqrt((float) distanceSquared);
+            double distance = Double.isFinite(distanceSquared) ? Math.sqrt(distanceSquared) : -1.0D;
+
+            // A waypoint with an explicitly chosen style — a claim bowtie, or any datapack style —
+            // keeps that icon at every distance. Vanilla ramps it down into a plain dot past the
+            // style's near_distance (64 blocks for bowtie), which throws away the only thing that
+            // distinguishes it from a player. The stock "default" style still ramps as normal.
+            Waypoint.Icon icon = waypoint.icon();
+            WaypointStyle style = client.gui.hud.getWaypointStyles().get(icon.style);
+            boolean pinStyle = !icon.style.equals(WaypointStyleAssets.DEFAULT);
+            Identifier dotSprite = style.sprite(pinStyle ? 0.0F : spriteDistance);
+            int color = icon.color.orElseGet(() -> waypoint.id().map(
+                    id -> ARGB.setBrightness(ARGB.color(255, id.hashCode()), 0.9F),
+                    name -> ARGB.setBrightness(ARGB.color(255, name.hashCode()), 0.9F)));
+
+            Identifier arrowSprite = switch (waypoint.pitchDirectionToCamera(level, client.gameRenderer, partialTickSupplier)) {
+                case UP -> LOCATOR_ARROW_UP;
+                case DOWN -> LOCATOR_ARROW_DOWN;
+                case NONE -> null;
+            };
+
+            int baseX = Mth.ceil((screenWidth - 9.0F) / 2.0F);
+            int markerX = baseX + Mth.floor(relativeYaw * 173.0D / 2.0D / 60.0D);
+            int markerY = locatorBarY - 2;
+            int size = calculateSizeFromDistance(distance < 0 ? Float.MAX_VALUE : (float) distance, 9) / 100;
+
+            entries.add(new EntryRenderData(uuid, markerX, markerX + 4, markerY + 4, size, distance, dotSprite, arrowSprite, true, false, color, null));
+        });
+        logWaypointCounts(seen[0], seen[1]);
+    }
+
+    private static int lastWaypointTotal = -1;
+    private static int lastWaypointNonPlayer = -1;
+
+    /**
+     * Logs the waypoint set once whenever it changes.
+     *
+     * <p>Diagnostic for the case where a claim marker is expected but nothing appears: it separates
+     * "the server never sent the waypoint" (total stays 0) from "it arrived but was filtered or
+     * drawn off-bar" (non-player count rises but no bowtie is visible).
+     */
+    private static void logWaypointCounts(int total, int nonPlayer) {
+        if (total == lastWaypointTotal && nonPlayer == lastWaypointNonPlayer) return;
+        lastWaypointTotal = total;
+        lastWaypointNonPlayer = nonPlayer;
+        System.out.println("[CrowBar] vanilla waypoints: total=" + total + " nonPlayer=" + nonPlayer);
+    }
+
+    private static java.util.Set<UUID> loggedWaypoints = new java.util.HashSet<>();
+
+    /** Logs each non-player waypoint once, so a mis-set style or colour is visible in the log. */
+    private static void logWaypointDiagnostics(TrackedWaypoint waypoint, Entity cameraEntity) {
+        UUID uuid = waypoint.id().left().orElse(null);
+        if (uuid == null || !loggedWaypoints.add(uuid)) return;
+        System.out.println("[CrowBar] waypoint " + uuid
+                + " style=" + waypoint.icon().style
+                + " color=" + waypoint.icon().color
+                + " distSq=" + waypoint.distanceSquared(cameraEntity));
+    }
+
+    /**
+     * Adds claims the server published for this player.
+     *
+     * <p>Independent of the vanilla waypoint system: positions arrive over a plugin channel from the
+     * server's claim records, so a claim renders at any distance and whether or not its terrain is
+     * loaded. The bowtie is drawn at full size regardless of distance, since a claim marker that
+     * degrades into a generic dot is indistinguishable from a player.
+     */
+    private static void addClaimWaypointEntries(Entity cameraEntity, Camera camera, int screenWidth, int locatorBarY, List<EntryRenderData> entries) {
+        for (ClaimWaypointData claim : CrowBarState.getClaimWaypoints()) {
+            double deltaX = claim.x() - cameraEntity.getX();
+            double deltaZ = claim.z() - cameraEntity.getZ();
+            double yaw = Math.toDegrees(Math.atan2(deltaZ, deltaX)) - 90.0;
+            yaw = (yaw + 360.0) % 360.0;
+
+            double relativeYaw = yaw - camera.yRot();
+            while (relativeYaw < -180) relativeYaw += 360;
+            while (relativeYaw > 180) relativeYaw -= 360;
+            if (!isWithinLocatorView(relativeYaw)) continue;
+
+            double deltaY = claim.y() - cameraEntity.getY();
+            double distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+
+            int baseX = Mth.ceil((screenWidth - 9.0F) / 2.0F);
+            int markerX = baseX + Mth.floor(relativeYaw * 173.0D / 2.0D / 60.0D);
+            int markerY = locatorBarY - 2;
+
+            int color = claim.color() != null
+                    ? claim.color()
+                    : ARGB.setBrightness(ARGB.color(255, claim.id().hashCode()), 0.9F);
+
+            entries.add(new EntryRenderData(null, markerX, markerX + 4, markerY + 4, 9, distance,
+                    CLAIM_BOWTIE_SPRITE, getArrowSpriteForPosition(camera, claim.x(), claim.y(), claim.z()),
+                    true, false, color, claim.name()));
+        }
     }
 
     private static void renderLocatorDot(GuiGraphicsExtractor context, EntryRenderData entry) {
         if (entry.markerVisible) {
-            int dotColor = getDotColor(entry.uuid);
+            int dotColor = entry.overrideColor != null ? entry.overrideColor : getDotColor(entry.uuid);
             drawTintedLocatorDot(context, entry.dotCenterX, entry.dotCenterY, entry.dotSprite, dotColor);
         }
         if (entry.arrowSprite != null) {
@@ -189,7 +364,7 @@ public final class CrowBarHudRenderer {
     }
 
     private static void renderLocatorSkin(GuiGraphicsExtractor context, EntryRenderData entry) {
-        if (!entry.markerVisible) return;
+        if (!entry.markerVisible || !entry.isPlayer) return;
         renderPlayerFace(context, entry.uuid, entry.dotCenterX - entry.size / 2, entry.dotCenterY - entry.size / 2, entry.size);
     }
 
@@ -197,7 +372,10 @@ public final class CrowBarHudRenderer {
         if (!entry.markerVisible) return;
         String text = "";
         if (CrowBarState.nameTagsEnabled) {
-            text = getName(entry.uuid);
+            // Players resolve through the tab list; claim markers only have a name if the server
+            // sent one, and stay unlabelled otherwise rather than showing a raw UUID.
+            String name = entry.isPlayer ? getName(entry.uuid) : entry.label;
+            text = name == null ? "" : name;
         }
         if (CrowBarState.showDistance && entry.distance > 0) {
             String distanceText = String.format("%.0fm", entry.distance);
@@ -220,7 +398,19 @@ public final class CrowBarHudRenderer {
         }
     }
 
-    private record EntryRenderData(UUID uuid, int markerX, int dotCenterX, int dotCenterY, int size, double distance, Identifier dotSprite, Identifier arrowSprite, boolean markerVisible) {
+    /**
+     * A single marker on the bar.
+     *
+     * <p>{@code isPlayer} entries come from a player position source and support skin and name-tag
+     * overlays. Non-player entries are vanilla waypoints relayed from the server (claim markers,
+     * datapack waypoints); they carry their own {@code overrideColor} from the waypoint icon and
+     * have no skin or name to look up.
+     *
+     * @param uuid          {@code null} for waypoints identified by a string rather than a UUID
+     * @param overrideColor pre-resolved ARGB, or {@code null} to derive one from {@code uuid}
+     * @param label         text to draw above the marker; players resolve their own from the tab list
+     */
+    private record EntryRenderData(UUID uuid, int markerX, int dotCenterX, int dotCenterY, int size, double distance, Identifier dotSprite, Identifier arrowSprite, boolean markerVisible, boolean isPlayer, Integer overrideColor, String label) {
     }
 
     private static void drawTintedLocatorDot(GuiGraphicsExtractor context, int centerX, int centerY, Identifier sprite, int color) {

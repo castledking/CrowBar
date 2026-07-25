@@ -23,6 +23,7 @@ public final class CrowBarClient implements ClientModInitializer {
     private KeyBinding toggleSkins;
     private KeyBinding toggleViewSelf;
     private KeyBinding toggleShowDistance;
+    private KeyBinding toggleClaimWaypoints;
 
     @Override
     public void onInitializeClient() {
@@ -45,6 +46,23 @@ public final class CrowBarClient implements ClientModInitializer {
                 }
         );
 
+        PayloadTypeRegistry.playS2C().register(
+                ClaimDataPacketHandler.ClaimDataPayload.ID,
+                ClaimDataPacketHandler.ClaimDataPayload.CODEC
+        );
+
+        ClientPlayNetworking.registerGlobalReceiver(
+                ClaimDataPacketHandler.ClaimDataPayload.ID,
+                (payload, context) -> {
+                    try {
+                        String json = payload.data.toString(StandardCharsets.UTF_8);
+                        ClaimDataPacketHandler.handleJson(json);
+                    } catch (Exception e) {
+                        // Silent fail - packet handling errors are not critical
+                    }
+                }
+        );
+
         toggleNameTags = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.crowbar.toggle_nametags",
                 InputUtil.Type.KEYSYM,
@@ -57,10 +75,12 @@ public final class CrowBarClient implements ClientModInitializer {
                 InputUtil.GLFW_KEY_B,
                 CATEGORY
         ));
+        // Unbound by default so the key is free for the claim waypoint toggle; players who want
+        // the self view can bind it themselves.
         toggleViewSelf = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.crowbar.view_self",
                 InputUtil.Type.KEYSYM,
-                InputUtil.GLFW_KEY_V,
+                -1,
                 CATEGORY
         ));
         toggleShowDistance = KeyBindingHelper.registerKeyBinding(new KeyBinding(
@@ -69,30 +89,51 @@ public final class CrowBarClient implements ClientModInitializer {
                 -1,
                 CATEGORY
         ));
+        toggleClaimWaypoints = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.crowbar.toggle_claim_waypoints",
+                InputUtil.Type.KEYSYM,
+                InputUtil.GLFW_KEY_Z,
+                CATEGORY
+        ));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            boolean locatorActive = CrowBarState.alliumDataReceived
-                    || CrowBarState.isIntegratedServer
-                    || CrowBarState.isVanillaLocatorBarVisible();
+            // Deliberately ungated. These toggle display preferences that persist and
+            // take effect whenever the bar next appears, so requiring the bar to be live
+            // right now would swallow the press — consumeClick drains it either way — and
+            // would disagree with the config screen, which sets the same fields unguarded.
+            // On a plain multiplayer server the old condition was only true while another
+            // player was in waypoint range, so the keys silently did nothing when alone.
             while (toggleNameTags.wasPressed()) {
-                if (hasModifiersPressed() || !locatorActive) continue;
+                if (hasModifiersPressed()) continue;
                 CrowBarState.nameTagsEnabled = !CrowBarState.nameTagsEnabled;
                 showToggle(client, "Name tags", CrowBarState.nameTagsEnabled);
             }
             while (toggleSkins.wasPressed()) {
-                if (hasModifiersPressed() || !locatorActive) continue;
+                if (hasModifiersPressed()) continue;
                 CrowBarState.skinsEnabled = !CrowBarState.skinsEnabled;
                 showToggle(client, "Skins", CrowBarState.skinsEnabled);
             }
             while (toggleViewSelf.wasPressed()) {
-                if (hasModifiersPressed() || !locatorActive) continue;
+                if (hasModifiersPressed()) continue;
                 CrowBarState.viewSelfEnabled = !CrowBarState.viewSelfEnabled;
                 showToggle(client, "View self", CrowBarState.viewSelfEnabled);
             }
             while (toggleShowDistance.wasPressed()) {
-                if (hasModifiersPressed() || !locatorActive) continue;
+                if (hasModifiersPressed()) continue;
                 CrowBarState.showDistance = !CrowBarState.showDistance;
                 showToggle(client, "Show distance", CrowBarState.showDistance);
+            }
+            while (toggleClaimWaypoints.wasPressed()) {
+                if (hasModifiersPressed()) continue;
+                // Only meaningful with GPExpansion on the server; without it there is nothing to
+                // cycle through and the key should stay free for other mods.
+                if (!CrowBarState.hasClaimDataReceived()) continue;
+                CrowBarState.ClaimWaypointMode mode = CrowBarState.cycleClaimWaypointMode();
+                showMessage(client, "Claim waypoints: " + switch (mode) {
+                    case OFF -> "off";
+                    case OWNED -> "owned";
+                    case TRUSTED -> "owned + trusted";
+                });
             }
         });
 
@@ -100,11 +141,13 @@ public final class CrowBarClient implements ClientModInitializer {
         // to LAN worlds or servers without Allium
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
                 CrowBarState.alliumPlayerData.clear();
+                CrowBarState.clearClaimWaypoints();
                 CrowBarState.alliumDataReceived = false;
                 CrowBarState.isIntegratedServer = client.getServer() != null;
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
                 CrowBarState.alliumPlayerData.clear();
+                CrowBarState.clearClaimWaypoints();
                 CrowBarState.alliumDataReceived = false;
                 CrowBarState.isIntegratedServer = false;
         });
@@ -123,6 +166,12 @@ public final class CrowBarClient implements ClientModInitializer {
                 || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_ALT) == GLFW.GLFW_PRESS
                 || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SUPER) == GLFW.GLFW_PRESS
                 || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SUPER) == GLFW.GLFW_PRESS;
+    }
+
+    private static void showMessage(MinecraftClient client, String message) {
+        if (client.player != null) {
+            client.player.sendMessage(Text.literal(message), true);
+        }
     }
 
     private static void showToggle(net.minecraft.client.MinecraftClient client, String label, boolean enabled) {

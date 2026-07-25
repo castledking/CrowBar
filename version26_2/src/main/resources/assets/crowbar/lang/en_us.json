@@ -10,5 +10,6 @@
   "crowbar.config.view_self": "View self",
   "crowbar.config.show_distance": "Show distance",
   "crowbar.config.on": "On",
-  "crowbar.config.off": "Off"
+  "crowbar.config.off": "Off",
+  "key.crowbar.toggle_claim_waypoints": "Toggle claim waypoints"
 }

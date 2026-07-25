@@ -4,10 +4,8 @@ import codes.castled.crowbar.CrowBarState;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.DeltaTracker;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.contextualbar.LocatorBar;
-import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -17,16 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LocatorBar.class)
 public abstract class CrowBarRendererMixin {
     private static boolean shouldCancelLocatorBar() {
-        if (CrowBarState.isXpBarVisible()) return false;
-        if (CrowBarState.isExternalRenderSuppressed()) {
-            return !CrowBarState.shouldKeepVanillaLocatorBarDuringExternalSuppression();
-        }
-        if (CrowBarState.viewSelfEnabled) return true;
-        if (CrowBarState.hasAlliumDataReceived()) return true;
-        if (!CrowBarState.isIntegratedServer) return false;
-        Entity cameraEntity = Minecraft.getInstance().getCameraEntity();
-        if (cameraEntity == null) return false;
-        return CrowBarState.hasRenderablePlayers(cameraEntity.getUUID());
+        return CrowBarState.shouldCancelVanillaLocatorBar();
     }
 
     @Inject(method = "extractBackground", at = @At("HEAD"), cancellable = true)
