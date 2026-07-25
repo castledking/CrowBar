@@ -32,6 +32,12 @@ Without Allium, CrowBar falls back to normal client-visible players, including L
   <a href="https://modrinth.com/plugin/allium-essentials#download"><img alt="Download Allium on Modrinth" src="https://img.shields.io/badge/Download%20Allium-Modrinth-00AF5C?style=for-the-badge&logo=modrinth&logoColor=white"></a>
 </p>
 
+## GPX-CrowBar
+
+When [GPExpansion](https://github.com/castledking/GPExpansion) is installed on the server, claim waypoints display the claim name and a bowtie marker on the locator bar to the claim owner and trusted players. CrowBar reads the same locator data and renders the name tag above the waypoint, giving you readable claim labels right on the locator bar.
+
+![GPX-CrowBar](https://castled.codes/assets/gpx-crowbar.png)
+
 ## Requirements
 
 Use the jar that matches your Minecraft line:
