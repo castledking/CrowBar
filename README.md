@@ -54,7 +54,7 @@ Default keybinds:
 
 - `N`: Toggle locator name tags
 - `B`: Toggle locator skins
-- `Z`: View self locator bar
+- `Z`: Toggle claim waypoints
 - `X`: Show distance
 
 Keybinds can be changed from Minecraft's controls menu under the CrowBar category.
