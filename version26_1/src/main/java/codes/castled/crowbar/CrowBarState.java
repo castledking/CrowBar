@@ -112,16 +112,16 @@ public final class CrowBarState {
      * either double-drawing or dropping waypoints entirely.
      */
     public static boolean shouldCancelVanillaLocatorBar() {
-        if (isXpBarVisible()) return false;
-        if (isExternalRenderSuppressed()) {
-            return !shouldKeepVanillaLocatorBarDuringExternalSuppression();
-        }
-        if (viewSelfEnabled) return true;
-        if (hasAlliumDataReceived()) return true;
-        if (!isIntegratedServer) return false;
         Entity cameraEntity = Minecraft.getInstance().getCameraEntity();
-        if (cameraEntity == null) return false;
-        return hasRenderablePlayers(cameraEntity.getUUID());
+        boolean hasRenderablePlayers = cameraEntity != null && hasRenderablePlayers(cameraEntity.getUUID());
+        return LocatorBarVisibility.shouldCancelVanilla(
+                isXpBarVisible(),
+                isExternalRenderSuppressed(),
+                shouldKeepVanillaLocatorBarDuringExternalSuppression(),
+                viewSelfEnabled,
+                hasAlliumDataReceived(),
+                isIntegratedServer,
+                hasRenderablePlayers);
     }
 
     public static Optional<Vec3> getPlayerPos(UUID uuid) {

@@ -2,6 +2,7 @@ package codes.castled.crowbar;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
+import net.minecraft.entity.Entity;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.Vec3d;
 
@@ -141,6 +142,21 @@ public final class CrowBarState {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /** Single visibility decision used by both halves of vanilla's locator renderer. */
+    public static boolean shouldCancelVanillaLocatorBar() {
+        Entity cameraEntity = MinecraftClient.getInstance().getCameraEntity();
+        boolean hasRenderablePlayers = cameraEntity != null
+                && hasRenderableAlliumEntries(cameraEntity.getUuid());
+        return LocatorBarVisibility.shouldCancelVanilla(
+                isXpBarVisible(),
+                isExternalRenderSuppressed(),
+                shouldKeepVanillaLocatorBarDuringExternalSuppression(),
+                viewSelfEnabled,
+                alliumDataReceived,
+                isIntegratedServer,
+                hasRenderablePlayers);
     }
 
     public static void setExternalRenderSuppressed(String owner, boolean suppressed, boolean keepVanillaLocatorBar) {

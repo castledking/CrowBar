@@ -66,7 +66,9 @@ public final class CrowBarHudRenderer {
         Entity cameraEntity = client.getCameraEntity();
         if (cameraEntity == null) return;
 
-        if (!hasClaims && !CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid())) return;
+        boolean hasRenderablePlayers = CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid());
+        if (!LocatorBarVisibility.shouldRenderCrowBar(
+                CrowBarState.isXpBarVisible(), hasRenderablePlayers, hasClaims, false, false)) return;
 
         Camera camera = client.gameRenderer.getCamera();
         TextRenderer textRenderer = client.textRenderer;
@@ -112,14 +114,11 @@ public final class CrowBarHudRenderer {
 
         addClaimWaypointEntries(cameraEntity, camera, screenWidth, locatorBarY, entries);
 
-        // Draw background (always, even if no entries are in view)
-        if (!CrowBarState.isXpBarVisible()) {
-            int barX = (screenWidth - 182) / 2;
-            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
-        }
+        // Draw background whenever the selected content exists, even if it is outside the yaw view.
+        int barX = (screenWidth - 182) / 2;
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
 
         if (entries.isEmpty()) return;
-        if (CrowBarState.isXpBarVisible()) return;
 
         // Find the entry closest to screen center
         EntryRenderData closest = entries.stream()

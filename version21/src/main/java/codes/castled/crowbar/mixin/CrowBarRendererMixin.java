@@ -47,48 +47,14 @@ public abstract class CrowBarRendererMixin {
 
     @Inject(method = "renderBar", at = @At("HEAD"), cancellable = true)
     private void crowbar$hideLocatorBarInSelfView(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
-        if (CrowBarState.isXpBarVisible()) return;
-        if (CrowBarState.isExternalRenderSuppressed()) {
-            if (!CrowBarState.shouldKeepVanillaLocatorBarDuringExternalSuppression()) {
-                ci.cancel();
-            }
-            return;
-        }
-        if (CrowBarState.viewSelfEnabled) {
-            ci.cancel();
-            return;
-        }
-        if (CrowBarState.alliumDataReceived) {
-            ci.cancel();
-            return;
-        }
-        if (!CrowBarState.isIntegratedServer) return;
-        Entity cameraEntity = MinecraftClient.getInstance().getCameraEntity();
-        if (cameraEntity != null && CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid())) {
+        if (CrowBarState.shouldCancelVanillaLocatorBar()) {
             ci.cancel();
         }
     }
 
     @Inject(method = "renderAddons", at = @At("HEAD"), cancellable = true)
     private void crowbar$hideLocatorAddonsInSelfView(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
-        if (CrowBarState.isXpBarVisible()) return;
-        if (CrowBarState.isExternalRenderSuppressed()) {
-            if (!CrowBarState.shouldKeepVanillaLocatorBarDuringExternalSuppression()) {
-                ci.cancel();
-            }
-            return;
-        }
-        if (CrowBarState.viewSelfEnabled) {
-            ci.cancel();
-            return;
-        }
-        if (CrowBarState.alliumDataReceived) {
-            ci.cancel();
-            return;
-        }
-        if (!CrowBarState.isIntegratedServer) return;
-        Entity cameraEntity = MinecraftClient.getInstance().getCameraEntity();
-        if (cameraEntity != null && CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid())) {
+        if (CrowBarState.shouldCancelVanillaLocatorBar()) {
             ci.cancel();
         }
     }

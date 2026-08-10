@@ -77,11 +77,15 @@ public final class CrowBarHudRenderer {
         if (client.player == null || client.level == null) return;
         if (!CrowBarState.hasAlliumDataReceived() && !CrowBarState.isIntegratedServer) return;
 
-        // Markers alone are enough to warrant a bar: a claim with nobody else online still needs a
-        // background to sit on.
-        boolean hasBarContent = CrowBarState.hasRenderablePlayers(client.player.getUUID())
-                || !CrowBarState.getClaimWaypoints().isEmpty()
-                || (CrowBarState.shouldCancelVanillaLocatorBar() && CrowBarState.isVanillaLocatorBarVisible());
+        Entity cameraEntity = client.getCameraEntity();
+        if (cameraEntity == null) return;
+        boolean crowBarOwnsVanillaBar = CrowBarState.shouldCancelVanillaLocatorBar();
+        boolean hasBarContent = LocatorBarVisibility.shouldRenderCrowBar(
+                CrowBarState.isXpBarVisible(),
+                CrowBarState.hasRenderablePlayers(client.player.getUUID()),
+                !CrowBarState.getClaimWaypoints().isEmpty(),
+                crowBarOwnsVanillaBar,
+                crowBarOwnsVanillaBar && hasNonClaimVanillaWaypoints(client, cameraEntity));
         if (!hasBarContent) return;
 
         int barX = (context.guiWidth() - 182) / 2;
@@ -286,6 +290,23 @@ public final class CrowBarHudRenderer {
             entries.add(new EntryRenderData(uuid, markerX, markerX + 4, markerY + 4, size, distance, dotSprite, arrowSprite, true, false, color, null));
         });
         logWaypointCounts(seen[0], seen[1]);
+    }
+
+    /** True when vanilla contributes something besides a player or GPX claim marker. */
+    private static boolean hasNonClaimVanillaWaypoints(Minecraft client, Entity cameraEntity) {
+        ClientPacketListener connection = client.getConnection();
+        if (connection == null) return false;
+
+        boolean[] found = {false};
+        connection.getWaypointManager().forEachWaypoint(cameraEntity, waypoint -> {
+            if (found[0]) return;
+            UUID uuid = waypoint.id().left().orElse(null);
+            if (uuid != null && uuid.equals(cameraEntity.getUUID())) return;
+            if (uuid != null && getPlayerInfo(uuid) != null) return;
+            if (CrowBarState.isClaimMarker(uuid)) return;
+            found[0] = true;
+        });
+        return found[0];
     }
 
     private static int lastWaypointTotal = -1;
