@@ -75,15 +75,22 @@ public final class CrowBarHudRenderer {
 
         Minecraft client = Minecraft.getInstance();
         if (client.player == null || client.level == null) return;
-        if (!CrowBarState.hasAlliumDataReceived() && !CrowBarState.isIntegratedServer) return;
+        boolean hasSelectedClaims = !CrowBarState.getClaimWaypoints().isEmpty();
+        if (!LocatorBarVisibility.hasRenderSource(
+                CrowBarState.hasAlliumDataReceived(),
+                CrowBarState.isIntegratedServer,
+                false,
+                hasSelectedClaims)) return;
 
         Entity cameraEntity = client.getCameraEntity();
         if (cameraEntity == null) return;
         boolean crowBarOwnsVanillaBar = CrowBarState.shouldCancelVanillaLocatorBar();
+        boolean hasRenderablePlayers = CrowBarState.shouldRenderPlayers()
+                && CrowBarState.hasRenderablePlayers(client.player.getUUID());
         boolean hasBarContent = LocatorBarVisibility.shouldRenderCrowBar(
                 CrowBarState.isXpBarVisible(),
-                CrowBarState.hasRenderablePlayers(client.player.getUUID()),
-                !CrowBarState.getClaimWaypoints().isEmpty(),
+                hasRenderablePlayers,
+                hasSelectedClaims,
                 crowBarOwnsVanillaBar,
                 crowBarOwnsVanillaBar && hasNonClaimVanillaWaypoints(client, cameraEntity));
         if (!hasBarContent) return;
@@ -111,31 +118,37 @@ public final class CrowBarHudRenderer {
         int centerX = screenWidth / 2;
 
         List<EntryRenderData> entries = new ArrayList<>();
-
-        boolean hasAlliumSource = false;
-        for (AlliumPlayerData alliumData : CrowBarState.alliumPlayerData.values()) {
-            if (alliumData.isExpired()) continue;
-            hasAlliumSource = true;
-            UUID uuid = alliumData.uuid;
-            addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, alliumData.x, alliumData.y, alliumData.z, true);
-        }
-
-        boolean hasIntegratedServerSource = client.getSingleplayerServer() != null;
-        if (!hasAlliumSource && hasIntegratedServerSource) {
-            for (ServerPlayer player : client.getSingleplayerServer().getPlayerList().getPlayers()) {
-                UUID uuid = player.getUUID();
-                if (uuid.equals(cameraEntity.getUUID())) continue;
-                addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, player.getX(), player.getY(), player.getZ(), false);
+        boolean hasSelectedClaims = !CrowBarState.getClaimWaypoints().isEmpty();
+        if (CrowBarState.shouldRenderPlayers()) {
+            boolean hasAlliumSource = false;
+            for (AlliumPlayerData alliumData : CrowBarState.alliumPlayerData.values()) {
+                if (alliumData.isExpired()) continue;
+                hasAlliumSource = true;
+                UUID uuid = alliumData.uuid;
+                addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, alliumData.x, alliumData.y, alliumData.z, true);
             }
-        }
 
-        if (!hasAlliumSource && !hasIntegratedServerSource) {
-            if (!CrowBarState.isVanillaLocatorBarVisible()) return;
-            for (Player player : client.level.players()) {
-                UUID uuid = player.getUUID();
-                if (uuid.equals(cameraEntity.getUUID())) continue;
-                if (getPlayerInfo(uuid) == null) continue;
-                addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, player.getX(), player.getY(), player.getZ(), false);
+            boolean hasIntegratedServerSource = client.getSingleplayerServer() != null;
+            if (!hasAlliumSource && hasIntegratedServerSource) {
+                for (ServerPlayer player : client.getSingleplayerServer().getPlayerList().getPlayers()) {
+                    UUID uuid = player.getUUID();
+                    if (uuid.equals(cameraEntity.getUUID())) continue;
+                    addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, player.getX(), player.getY(), player.getZ(), false);
+                }
+            }
+
+            if (!hasAlliumSource && !hasIntegratedServerSource) {
+                boolean vanillaLocatorVisible = CrowBarState.isVanillaLocatorBarVisible();
+                if (!LocatorBarVisibility.hasRenderSource(
+                        false, false, vanillaLocatorVisible, hasSelectedClaims)) return;
+                if (vanillaLocatorVisible) {
+                    for (Player player : client.level.players()) {
+                        UUID uuid = player.getUUID();
+                        if (uuid.equals(cameraEntity.getUUID())) continue;
+                        if (getPlayerInfo(uuid) == null) continue;
+                        addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, player.getX(), player.getY(), player.getZ(), false);
+                    }
+                }
             }
         }
 
@@ -164,7 +177,8 @@ public final class CrowBarHudRenderer {
             renderLocatorDot(context, closest);
         }
 
-        if (CrowBarState.skinsEnabled) {
+        if (LocatorBarVisibility.shouldRenderPlayerSkins(
+                CrowBarState.shouldRenderPlayers(), CrowBarState.skinsEnabled)) {
             for (EntryRenderData entry : entries) {
                 if (!entry.markerVisible) continue;
                 if (entry == closest) continue;
@@ -176,7 +190,8 @@ public final class CrowBarHudRenderer {
             }
         }
 
-        if (CrowBarState.nameTagsEnabled || CrowBarState.showDistance) {
+        if (LocatorBarVisibility.shouldRenderLabels(
+                CrowBarState.nameTagsEnabled, CrowBarState.showDistance)) {
             for (EntryRenderData entry : entries) {
                 if (!entry.markerVisible) continue;
                 if (entry == closest) continue;

@@ -10,6 +10,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 
@@ -86,7 +87,7 @@ public final class CrowBarClient implements ClientModInitializer {
         toggleShowDistance = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.crowbar.show_distance",
                 InputUtil.Type.KEYSYM,
-                -1,
+                InputUtil.GLFW_KEY_X,
                 CATEGORY
         ));
         toggleClaimWaypoints = KeyBindingHelper.registerKeyBinding(new KeyBinding(
@@ -104,30 +105,31 @@ public final class CrowBarClient implements ClientModInitializer {
             // On a plain multiplayer server the old condition was only true while another
             // player was in waypoint range, so the keys silently did nothing when alone.
             while (toggleNameTags.wasPressed()) {
-                if (hasModifiersPressed()) continue;
+                if (shouldSkipKeybind(toggleNameTags)) continue;
                 CrowBarState.nameTagsEnabled = !CrowBarState.nameTagsEnabled;
                 showToggle(client, "Name tags", CrowBarState.nameTagsEnabled);
             }
             while (toggleSkins.wasPressed()) {
-                if (hasModifiersPressed()) continue;
+                if (shouldSkipKeybind(toggleSkins)) continue;
                 CrowBarState.skinsEnabled = !CrowBarState.skinsEnabled;
                 showToggle(client, "Skins", CrowBarState.skinsEnabled);
             }
             while (toggleViewSelf.wasPressed()) {
-                if (hasModifiersPressed()) continue;
+                if (shouldSkipKeybind(toggleViewSelf)) continue;
                 CrowBarState.viewSelfEnabled = !CrowBarState.viewSelfEnabled;
                 showToggle(client, "View self", CrowBarState.viewSelfEnabled);
             }
             while (toggleShowDistance.wasPressed()) {
-                if (hasModifiersPressed()) continue;
+                if (shouldSkipKeybind(toggleShowDistance)) continue;
                 CrowBarState.showDistance = !CrowBarState.showDistance;
                 showToggle(client, "Show distance", CrowBarState.showDistance);
             }
             while (toggleClaimWaypoints.wasPressed()) {
-                if (hasModifiersPressed()) continue;
-                // Only meaningful with GPExpansion on the server; without it there is nothing to
-                // cycle through and the key should stay free for other mods.
-                if (!CrowBarState.hasClaimDataReceived()) continue;
+                if (shouldSkipKeybind(toggleClaimWaypoints)) continue;
+                if (!CrowBarState.hasClaimDataReceived()) {
+                    showClaimsLoading(client);
+                    continue;
+                }
                 CrowBarState.ClaimWaypointMode mode = CrowBarState.cycleClaimWaypointMode();
                 showMessage(client, "Claim waypoints: " + switch (mode) {
                     case OFF -> "off";
@@ -168,9 +170,30 @@ public final class CrowBarClient implements ClientModInitializer {
                 || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SUPER) == GLFW.GLFW_PRESS;
     }
 
+    private static boolean hasBoundModifiers(KeyBinding binding) {
+        try {
+            Class<?> apiClass = Class.forName("de.siphalor.amecs.key_modifiers.api.AmecsKeyModifiersApi");
+            Object modifiers = apiClass.getMethod("getBoundModifiers", KeyBinding.class).invoke(null, binding);
+            return !((Boolean) modifiers.getClass().getMethod("isUnset").invoke(modifiers));
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private static boolean shouldSkipKeybind(KeyBinding binding) {
+        return !hasBoundModifiers(binding) && hasModifiersPressed();
+    }
+
     private static void showMessage(MinecraftClient client, String message) {
         if (client.player != null) {
             client.player.sendMessage(Text.literal(message), true);
+        }
+    }
+
+    private static void showClaimsLoading(MinecraftClient client) {
+        if (client.player != null) {
+            client.player.sendMessage(
+                    Text.literal("Collecting claims... Please wait.").formatted(Formatting.RED), true);
         }
     }
 

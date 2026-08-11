@@ -11,6 +11,7 @@ public final class LocatorBarVisibility {
             boolean keepVanillaDuringExternalSuppression,
             boolean selfViewEnabled,
             boolean alliumDataReceived,
+            boolean claimWaypointModeActive,
             boolean integratedServer,
             boolean hasRenderablePlayers
     ) {
@@ -20,6 +21,7 @@ public final class LocatorBarVisibility {
         if (externallySuppressed) return !keepVanillaDuringExternalSuppression;
         if (selfViewEnabled) return true;
         if (alliumDataReceived) return true;
+        if (claimWaypointModeActive) return true;
         return integratedServer && hasRenderablePlayers;
     }
 
@@ -33,5 +35,29 @@ public final class LocatorBarVisibility {
         return !xpBarVisible && (hasRenderablePlayers
                 || hasSelectedClaims
                 || (crowBarOwnsVanillaBar && hasNonClaimVanillaWaypoints));
+    }
+
+    /** Whether any independent source can supply content for CrowBar's locator HUD. */
+    public static boolean hasRenderSource(
+            boolean alliumPlayerDataReceived,
+            boolean integratedServer,
+            boolean vanillaLocatorVisible,
+            boolean hasSelectedClaims
+    ) {
+        return alliumPlayerDataReceived || integratedServer || vanillaLocatorVisible || hasSelectedClaims;
+    }
+
+    /** Player markers and claim markers are mutually exclusive locator modes. */
+    public static boolean shouldRenderPlayers(boolean claimWaypointModeActive) {
+        return !claimWaypointModeActive;
+    }
+
+    /** Names and distances share the same label layer for both players and claims. */
+    public static boolean shouldRenderLabels(boolean namesEnabled, boolean distanceEnabled) {
+        return namesEnabled || distanceEnabled;
+    }
+
+    public static boolean shouldRenderPlayerSkins(boolean playerModeActive, boolean skinsEnabled) {
+        return playerModeActive && skinsEnabled;
     }
 }

@@ -9,7 +9,7 @@ class LocatorBarVisibilityTest {
     @Test
     void xpWindowSuppressesVanillaLocatorMarkers() {
         assertTrue(LocatorBarVisibility.shouldCancelVanilla(
-                true, false, true, false, true, false, false));
+                true, false, true, false, true, false, false, false));
     }
 
     @Test
@@ -34,5 +34,41 @@ class LocatorBarVisibilityTest {
     void xpWindowHidesCrowBarClaimsAndBackground() {
         assertFalse(LocatorBarVisibility.shouldRenderCrowBar(
                 true, false, true, true, false));
+    }
+
+    @Test
+    void selectedClaimsAreAnIndependentRenderSource() {
+        assertTrue(LocatorBarVisibility.hasRenderSource(
+                false, false, false, true));
+    }
+
+    @Test
+    void activeClaimModeMakesCrowBarOwnTheVanillaBar() {
+        assertTrue(LocatorBarVisibility.shouldCancelVanilla(
+                false, false, true, false, false, true, false, false));
+    }
+
+    @Test
+    void activeClaimModeHidesPlayerMarkers() {
+        assertFalse(LocatorBarVisibility.shouldRenderPlayers(true));
+    }
+
+    @Test
+    void disabledClaimModeShowsPlayerMarkers() {
+        assertTrue(LocatorBarVisibility.shouldRenderPlayers(false));
+    }
+
+    @Test
+    void namesAndDistancesIndependentlyEnableTheSharedLabelLayer() {
+        assertTrue(LocatorBarVisibility.shouldRenderLabels(true, false));
+        assertTrue(LocatorBarVisibility.shouldRenderLabels(false, true));
+        assertFalse(LocatorBarVisibility.shouldRenderLabels(false, false));
+    }
+
+    @Test
+    void skinsOnlyRenderInPlayerModeWhenEnabled() {
+        assertTrue(LocatorBarVisibility.shouldRenderPlayerSkins(true, true));
+        assertFalse(LocatorBarVisibility.shouldRenderPlayerSkins(true, false));
+        assertFalse(LocatorBarVisibility.shouldRenderPlayerSkins(false, true));
     }
 }

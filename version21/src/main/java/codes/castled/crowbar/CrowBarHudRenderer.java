@@ -66,7 +66,9 @@ public final class CrowBarHudRenderer {
         Entity cameraEntity = client.getCameraEntity();
         if (cameraEntity == null) return;
 
-        boolean hasRenderablePlayers = CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid());
+        boolean renderPlayers = CrowBarState.shouldRenderPlayers();
+        boolean hasRenderablePlayers = renderPlayers
+                && CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid());
         if (!LocatorBarVisibility.shouldRenderCrowBar(
                 CrowBarState.isXpBarVisible(), hasRenderablePlayers, hasClaims, false, false)) return;
 
@@ -79,37 +81,39 @@ public final class CrowBarHudRenderer {
 
         // First pass: collect all renderable entries with computed positions
         List<EntryRenderData> entries = new ArrayList<>();
-        for (AlliumPlayerData alliumData : CrowBarState.alliumPlayerData.values()) {
-            if (alliumData.isExpired()) continue;
-            UUID uuid = alliumData.uuid;
-            if (uuid.equals(cameraEntity.getUuid())) continue;
+        if (renderPlayers) {
+            for (AlliumPlayerData alliumData : CrowBarState.alliumPlayerData.values()) {
+                if (alliumData.isExpired()) continue;
+                UUID uuid = alliumData.uuid;
+                if (uuid.equals(cameraEntity.getUuid())) continue;
 
-            double deltaX = alliumData.x - cameraEntity.getX();
-            double deltaZ = alliumData.z - cameraEntity.getZ();
-            double yaw = Math.toDegrees(Math.atan2(deltaZ, deltaX)) - 90.0;
-            yaw = (yaw + 360.0) % 360.0;
+                double deltaX = alliumData.x - cameraEntity.getX();
+                double deltaZ = alliumData.z - cameraEntity.getZ();
+                double yaw = Math.toDegrees(Math.atan2(deltaZ, deltaX)) - 90.0;
+                yaw = (yaw + 360.0) % 360.0;
 
-            double relativeYaw = yaw - camera.getYaw();
-            while (relativeYaw < -180) relativeYaw += 360;
-            while (relativeYaw > 180) relativeYaw -= 360;
+                double relativeYaw = yaw - camera.getYaw();
+                while (relativeYaw < -180) relativeYaw += 360;
+                while (relativeYaw > 180) relativeYaw -= 360;
 
-            double distance = Math.sqrt(deltaX * deltaX + (alliumData.y - cameraEntity.getY()) * (alliumData.y - cameraEntity.getY()) + deltaZ * deltaZ);
-            boolean markerVisible = isWithinLocatorView(relativeYaw);
-            if (!markerVisible) continue;
+                double distance = Math.sqrt(deltaX * deltaX + (alliumData.y - cameraEntity.getY()) * (alliumData.y - cameraEntity.getY()) + deltaZ * deltaZ);
+                boolean markerVisible = isWithinLocatorView(relativeYaw);
+                if (!markerVisible) continue;
 
-            Identifier arrowSprite = getArrowSpriteForPosition(camera, alliumData.x, alliumData.y, alliumData.z);
+                Identifier arrowSprite = getArrowSpriteForPosition(camera, alliumData.x, alliumData.y, alliumData.z);
 
-            int baseX = MathHelper.ceil((screenWidth - 9.0F) / 2.0F);
-            int markerX = baseX + MathHelper.floor(relativeYaw * 173.0D / 2.0D / 60.0D);
-            int markerY = locatorBarY - 2;
+                int baseX = MathHelper.ceil((screenWidth - 9.0F) / 2.0F);
+                int markerX = baseX + MathHelper.floor(relativeYaw * 173.0D / 2.0D / 60.0D);
+                int markerY = locatorBarY - 2;
 
-            int sizeHundredths = calculateSizeFromDistance((float) distance, 9);
-            int size = sizeHundredths / 100;
-            int dotCenterX = markerX + 4;
-            int dotCenterY = markerY + 4;
-            Identifier dotSprite = getDotSpriteForDistance(distance);
+                int sizeHundredths = calculateSizeFromDistance((float) distance, 9);
+                int size = sizeHundredths / 100;
+                int dotCenterX = markerX + 4;
+                int dotCenterY = markerY + 4;
+                Identifier dotSprite = getDotSpriteForDistance(distance);
 
-            entries.add(new EntryRenderData(uuid, markerX, dotCenterX, dotCenterY, size, distance, dotSprite, arrowSprite, markerVisible, true, null, null));
+                entries.add(new EntryRenderData(uuid, markerX, dotCenterX, dotCenterY, size, distance, dotSprite, arrowSprite, markerVisible, true, null, null));
+            }
         }
 
         addClaimWaypointEntries(cameraEntity, camera, screenWidth, locatorBarY, entries);
@@ -184,14 +188,16 @@ public final class CrowBarHudRenderer {
             drawVerticalArrow(context, entry.dotCenterX, entry.dotCenterY, entry.arrowSprite);
         }
 
-        if (entry.markerVisible && entry.isPlayer && CrowBarState.skinsEnabled) {
+        if (entry.markerVisible && LocatorBarVisibility.shouldRenderPlayerSkins(
+                entry.isPlayer, CrowBarState.skinsEnabled)) {
             SkinTextures skin = getSkin(entry.uuid);
             if (skin != null) {
                 PlayerSkinDrawer.draw(context, skin, entry.dotCenterX - entry.size / 2, entry.dotCenterY - entry.size / 2, entry.size);
             }
         }
 
-        if (entry.markerVisible && (CrowBarState.nameTagsEnabled || CrowBarState.showDistance)) {
+        if (entry.markerVisible && LocatorBarVisibility.shouldRenderLabels(
+                CrowBarState.nameTagsEnabled, CrowBarState.showDistance)) {
             String text = "";
             if (CrowBarState.nameTagsEnabled) {
                 // Players resolve through the tab list; claims carry their name in the entry.

@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -97,9 +98,10 @@ public final class CrowBarClient implements ClientModInitializer {
             }
             while (toggleClaimWaypoints.consumeClick()) {
                 if (shouldSkipKeybind(toggleClaimWaypoints)) continue;
-                // Only meaningful with GPExpansion on the server; without it there is nothing to
-                // cycle through and the key should stay free for other mods.
-                if (!CrowBarState.hasClaimDataReceived()) continue;
+                if (!CrowBarState.hasClaimDataReceived()) {
+                    showClaimsLoading(client);
+                    continue;
+                }
                 CrowBarState.ClaimWaypointMode mode = CrowBarState.cycleClaimWaypointMode();
                 showMessage(client, "Claim waypoints: " + switch (mode) {
                     case OFF -> "off";
@@ -154,6 +156,13 @@ public final class CrowBarClient implements ClientModInitializer {
     private static void showMessage(Minecraft client, String message) {
         if (client.player != null) {
             client.player.sendOverlayMessage(Component.literal(message));
+        }
+    }
+
+    private static void showClaimsLoading(Minecraft client) {
+        if (client.player != null) {
+            client.player.sendOverlayMessage(
+                    Component.literal("Collecting claims... Please wait.").withStyle(ChatFormatting.RED));
         }
     }
 

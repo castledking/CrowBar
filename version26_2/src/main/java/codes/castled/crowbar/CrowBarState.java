@@ -41,6 +41,15 @@ public final class CrowBarState {
         return claimDataReceived;
     }
 
+    /** True only when GPExpansion was detected and its claim display is not switched off. */
+    public static boolean isClaimWaypointModeActive() {
+        return claimDataReceived && claimWaypointMode != ClaimWaypointMode.OFF;
+    }
+
+    public static boolean shouldRenderPlayers() {
+        return LocatorBarVisibility.shouldRenderPlayers(isClaimWaypointModeActive());
+    }
+
     /** Advances OFF to OWNED to TRUSTED and back to OFF. */
     public static ClaimWaypointMode cycleClaimWaypointMode() {
         claimWaypointMode = switch (claimWaypointMode) {
@@ -88,6 +97,7 @@ public final class CrowBarState {
         alliumPlayerData.clear();
         claimWaypoints = java.util.List.of();
         claimMarkerIds = java.util.Set.of();
+        claimDataReceived = false;
         alliumDataReceived = false;
         isIntegratedServer = false;
     }
@@ -119,6 +129,7 @@ public final class CrowBarState {
                 shouldKeepVanillaLocatorBarDuringExternalSuppression(),
                 viewSelfEnabled,
                 hasAlliumDataReceived(),
+                isClaimWaypointModeActive(),
                 isIntegratedServer,
                 hasRenderablePlayers);
     }
