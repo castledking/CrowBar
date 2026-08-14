@@ -207,16 +207,14 @@ public final class CrowBarHudRenderer {
     private static void addEntryForPosition(Entity cameraEntity, Camera camera, int screenWidth, int locatorBarY, List<EntryRenderData> entries, UUID uuid, double x, double y, double z, boolean allowVerticalArrow) {
         if (uuid.equals(cameraEntity.getUUID())) return;
 
-        double deltaX = x - cameraEntity.getX();
-        double deltaZ = z - cameraEntity.getZ();
-        double yaw = Math.toDegrees(Math.atan2(deltaZ, deltaX)) - 90.0;
-        yaw = (yaw + 360.0) % 360.0;
+        Vec3 cameraPosition = camera.position();
+        double deltaX = x - cameraPosition.x();
+        double deltaZ = z - cameraPosition.z();
+        double relativeYaw = LocatorProjection.relativeYaw(
+                cameraPosition.x(), cameraPosition.z(), camera.yRot(), x, z);
 
-        double relativeYaw = yaw - camera.yRot();
-        while (relativeYaw < -180) relativeYaw += 360;
-        while (relativeYaw > 180) relativeYaw -= 360;
-
-        double distance = Math.sqrt(deltaX * deltaX + (y - cameraEntity.getY()) * (y - cameraEntity.getY()) + deltaZ * deltaZ);
+        double deltaY = y - cameraPosition.y();
+        double distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
         boolean markerVisible = isWithinLocatorView(relativeYaw);
         if (!markerVisible) return;
 
@@ -362,18 +360,15 @@ public final class CrowBarHudRenderer {
      * degrades into a generic dot is indistinguishable from a player.
      */
     private static void addClaimWaypointEntries(Entity cameraEntity, Camera camera, int screenWidth, int locatorBarY, List<EntryRenderData> entries) {
+        Vec3 cameraPosition = camera.position();
         for (ClaimWaypointData claim : CrowBarState.getClaimWaypoints()) {
-            double deltaX = claim.x() - cameraEntity.getX();
-            double deltaZ = claim.z() - cameraEntity.getZ();
-            double yaw = Math.toDegrees(Math.atan2(deltaZ, deltaX)) - 90.0;
-            yaw = (yaw + 360.0) % 360.0;
-
-            double relativeYaw = yaw - camera.yRot();
-            while (relativeYaw < -180) relativeYaw += 360;
-            while (relativeYaw > 180) relativeYaw -= 360;
+            double deltaX = claim.x() - cameraPosition.x();
+            double deltaZ = claim.z() - cameraPosition.z();
+            double relativeYaw = LocatorProjection.relativeYaw(
+                    cameraPosition.x(), cameraPosition.z(), camera.yRot(), claim.x(), claim.z());
             if (!isWithinLocatorView(relativeYaw)) continue;
 
-            double deltaY = claim.y() - cameraEntity.getY();
+            double deltaY = claim.y() - cameraPosition.y();
             double distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
 
             int baseX = Mth.ceil((screenWidth - 9.0F) / 2.0F);

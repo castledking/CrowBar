@@ -54,7 +54,32 @@ public final class CrowBarHudRenderer {
     private CrowBarHudRenderer() {
     }
 
-    public static void renderAlliumRestoredPlayers(DrawContext context, RenderTickCounter tickCounter) {
+    /** Draws the forced locator background after vanilla's selected contextual-bar background. */
+    public static void renderLocatorBarBackground(DrawContext context, RenderTickCounter tickCounter) {
+        if (CrowBarState.viewSelfEnabled) return;
+        if (CrowBarState.isExternalRenderSuppressed()) return;
+        boolean hasClaims = !CrowBarState.getClaimWaypoints().isEmpty();
+        if (!CrowBarState.isIntegratedServer && !CrowBarState.alliumDataReceived && !hasClaims) return;
+
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null || client.world == null) return;
+
+        Entity cameraEntity = client.getCameraEntity();
+        if (cameraEntity == null) return;
+
+        boolean renderPlayers = CrowBarState.shouldRenderPlayers();
+        boolean hasRenderablePlayers = renderPlayers
+                && CrowBarState.hasRenderableAlliumEntries(cameraEntity.getUuid());
+        if (!LocatorBarVisibility.shouldRenderCrowBar(
+                CrowBarState.isXpBarVisible(), hasRenderablePlayers, hasClaims, false, false)) return;
+
+        int barX = (context.getScaledWindowWidth() - 182) / 2;
+        int locatorBarY = context.getScaledWindowHeight() - 29;
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
+    }
+
+    /** Draws player and claim markers after vanilla's selected contextual-bar addon layer. */
+    public static void renderLocatorBarMarkers(DrawContext context, RenderTickCounter tickCounter) {
         if (CrowBarState.viewSelfEnabled) return;
         if (CrowBarState.isExternalRenderSuppressed()) return;
         boolean hasClaims = !CrowBarState.getClaimWaypoints().isEmpty();
@@ -73,6 +98,7 @@ public final class CrowBarHudRenderer {
                 CrowBarState.isXpBarVisible(), hasRenderablePlayers, hasClaims, false, false)) return;
 
         Camera camera = client.gameRenderer.getCamera();
+        Vec3d cameraPosition = camera.getCameraPos();
         TextRenderer textRenderer = client.textRenderer;
         int screenWidth = context.getScaledWindowWidth();
         int screenHeight = context.getScaledWindowHeight();
@@ -87,16 +113,13 @@ public final class CrowBarHudRenderer {
                 UUID uuid = alliumData.uuid;
                 if (uuid.equals(cameraEntity.getUuid())) continue;
 
-                double deltaX = alliumData.x - cameraEntity.getX();
-                double deltaZ = alliumData.z - cameraEntity.getZ();
-                double yaw = Math.toDegrees(Math.atan2(deltaZ, deltaX)) - 90.0;
-                yaw = (yaw + 360.0) % 360.0;
+                double deltaX = alliumData.x - cameraPosition.x;
+                double deltaZ = alliumData.z - cameraPosition.z;
+                double relativeYaw = LocatorProjection.relativeYaw(
+                        cameraPosition.x, cameraPosition.z, camera.getYaw(), alliumData.x, alliumData.z);
 
-                double relativeYaw = yaw - camera.getYaw();
-                while (relativeYaw < -180) relativeYaw += 360;
-                while (relativeYaw > 180) relativeYaw -= 360;
-
-                double distance = Math.sqrt(deltaX * deltaX + (alliumData.y - cameraEntity.getY()) * (alliumData.y - cameraEntity.getY()) + deltaZ * deltaZ);
+                double deltaY = alliumData.y - cameraPosition.y;
+                double distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
                 boolean markerVisible = isWithinLocatorView(relativeYaw);
                 if (!markerVisible) continue;
 
@@ -117,10 +140,6 @@ public final class CrowBarHudRenderer {
         }
 
         addClaimWaypointEntries(cameraEntity, camera, screenWidth, locatorBarY, entries);
-
-        // Draw background whenever the selected content exists, even if it is outside the yaw view.
-        int barX = (screenWidth - 182) / 2;
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, LOCATOR_BAR_BACKGROUND, barX, locatorBarY, 182, 5);
 
         if (entries.isEmpty()) return;
 
@@ -151,18 +170,15 @@ public final class CrowBarHudRenderer {
      * degrades into a generic dot is indistinguishable from a player.
      */
     private static void addClaimWaypointEntries(Entity cameraEntity, Camera camera, int screenWidth, int locatorBarY, List<EntryRenderData> entries) {
+        Vec3d cameraPosition = camera.getCameraPos();
         for (ClaimWaypointData claim : CrowBarState.getClaimWaypoints()) {
-            double deltaX = claim.x() - cameraEntity.getX();
-            double deltaZ = claim.z() - cameraEntity.getZ();
-            double yaw = Math.toDegrees(Math.atan2(deltaZ, deltaX)) - 90.0;
-            yaw = (yaw + 360.0) % 360.0;
-
-            double relativeYaw = yaw - camera.getYaw();
-            while (relativeYaw < -180) relativeYaw += 360;
-            while (relativeYaw > 180) relativeYaw -= 360;
+            double deltaX = claim.x() - cameraPosition.x;
+            double deltaZ = claim.z() - cameraPosition.z;
+            double relativeYaw = LocatorProjection.relativeYaw(
+                    cameraPosition.x, cameraPosition.z, camera.getYaw(), claim.x(), claim.z());
             if (!isWithinLocatorView(relativeYaw)) continue;
 
-            double deltaY = claim.y() - cameraEntity.getY();
+            double deltaY = claim.y() - cameraPosition.y;
             double distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
 
             int baseX = MathHelper.ceil((screenWidth - 9.0F) / 2.0F);
