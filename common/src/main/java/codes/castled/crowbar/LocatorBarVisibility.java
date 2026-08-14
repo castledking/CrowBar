@@ -5,6 +5,15 @@ public final class LocatorBarVisibility {
     private LocatorBarVisibility() {
     }
 
+    /** A claim mode only owns the HUD when it has something to replace player mode with. */
+    public static boolean isClaimWaypointModeActive(
+            boolean claimDataReceived,
+            boolean claimModeEnabled,
+            boolean hasSelectedClaims
+    ) {
+        return claimDataReceived && claimModeEnabled && hasSelectedClaims;
+    }
+
     public static boolean shouldCancelVanilla(
             boolean xpBarVisible,
             boolean externallySuppressed,

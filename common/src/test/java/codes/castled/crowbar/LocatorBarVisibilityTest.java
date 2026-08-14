@@ -54,6 +54,24 @@ class LocatorBarVisibilityTest {
     }
 
     @Test
+    void emptyClaimSelectionLeavesPlayerModeAndVanillaHudEnabled() {
+        boolean claimModeActive = LocatorBarVisibility.isClaimWaypointModeActive(
+                true, true, false);
+
+        assertFalse(claimModeActive);
+        assertTrue(LocatorBarVisibility.shouldRenderPlayers(claimModeActive));
+        assertFalse(LocatorBarVisibility.shouldCancelVanilla(
+                false, false, true, false, false,
+                claimModeActive, false, false));
+    }
+
+    @Test
+    void populatedClaimSelectionActivatesClaimMode() {
+        assertTrue(LocatorBarVisibility.isClaimWaypointModeActive(
+                true, true, true));
+    }
+
+    @Test
     void disabledClaimModeShowsPlayerMarkers() {
         assertTrue(LocatorBarVisibility.shouldRenderPlayers(false));
     }

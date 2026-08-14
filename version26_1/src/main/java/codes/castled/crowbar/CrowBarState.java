@@ -41,9 +41,16 @@ public final class CrowBarState {
         return claimDataReceived;
     }
 
-    /** True only when GPExpansion was detected and its claim display is not switched off. */
+    public static boolean hasAnyClaimWaypoints() {
+        return !claimWaypoints.isEmpty();
+    }
+
+    /** True only when the selected GPExpansion mode has claims to replace player mode with. */
     public static boolean isClaimWaypointModeActive() {
-        return claimDataReceived && claimWaypointMode != ClaimWaypointMode.OFF;
+        return LocatorBarVisibility.isClaimWaypointModeActive(
+                claimDataReceived,
+                claimWaypointMode != ClaimWaypointMode.OFF,
+                hasSelectedClaimWaypoints());
     }
 
     public static boolean shouldRenderPlayers() {
@@ -72,6 +79,14 @@ public final class CrowBarState {
             case OFF -> java.util.List.of();
             case OWNED -> claimWaypoints.stream().filter(ClaimWaypointData::owned).toList();
             case TRUSTED -> claimWaypoints;
+        };
+    }
+
+    public static boolean hasSelectedClaimWaypoints() {
+        return switch (claimWaypointMode) {
+            case OFF -> false;
+            case OWNED -> claimWaypoints.stream().anyMatch(ClaimWaypointData::owned);
+            case TRUSTED -> !claimWaypoints.isEmpty();
         };
     }
 

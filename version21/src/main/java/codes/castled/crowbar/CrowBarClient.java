@@ -19,6 +19,8 @@ import java.nio.charset.StandardCharsets;
 public final class CrowBarClient implements ClientModInitializer {
     private static final KeyBinding.Category CATEGORY =
             KeyBinding.Category.create(Identifier.of("crowbar", "controls"));
+    private static final MessageRateLimiter NO_CLAIMS_MESSAGE_LIMITER =
+            new MessageRateLimiter(10_000);
 
     private KeyBinding toggleNameTags;
     private KeyBinding toggleSkins;
@@ -130,7 +132,16 @@ public final class CrowBarClient implements ClientModInitializer {
                     showClaimsLoading(client);
                     continue;
                 }
+                if (!CrowBarState.hasAnyClaimWaypoints()) {
+                    showNoClaimsFound(client);
+                    continue;
+                }
                 CrowBarState.ClaimWaypointMode mode = CrowBarState.cycleClaimWaypointMode();
+                if (mode != CrowBarState.ClaimWaypointMode.OFF
+                        && !CrowBarState.hasSelectedClaimWaypoints()) {
+                    showNoClaimsFound(client);
+                    continue;
+                }
                 showMessage(client, "Claim waypoints: " + switch (mode) {
                     case OFF -> "off";
                     case OWNED -> "owned";
@@ -146,12 +157,14 @@ public final class CrowBarClient implements ClientModInitializer {
                 CrowBarState.clearClaimWaypoints();
                 CrowBarState.alliumDataReceived = false;
                 CrowBarState.isIntegratedServer = client.getServer() != null;
+                NO_CLAIMS_MESSAGE_LIMITER.reset();
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
                 CrowBarState.alliumPlayerData.clear();
                 CrowBarState.clearClaimWaypoints();
                 CrowBarState.alliumDataReceived = false;
                 CrowBarState.isIntegratedServer = false;
+                NO_CLAIMS_MESSAGE_LIMITER.reset();
         });
 
         // Note: Allium-restored player rendering is now injected via InGameHudMixin
@@ -194,6 +207,12 @@ public final class CrowBarClient implements ClientModInitializer {
         if (client.player != null) {
             client.player.sendMessage(
                     Text.literal("Collecting claims... Please wait.").formatted(Formatting.RED), true);
+        }
+    }
+
+    private static void showNoClaimsFound(MinecraftClient client) {
+        if (client.player != null && NO_CLAIMS_MESSAGE_LIMITER.tryAcquire(System.currentTimeMillis())) {
+            client.player.sendMessage(Text.literal("No claims found").formatted(Formatting.RED), true);
         }
     }
 

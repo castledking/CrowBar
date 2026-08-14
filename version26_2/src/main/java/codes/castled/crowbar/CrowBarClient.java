@@ -20,6 +20,8 @@ import static org.lwjgl.glfw.GLFW.*;
 public final class CrowBarClient implements ClientModInitializer {
     private static final KeyMapping.Category CATEGORY =
             new KeyMapping.Category(Identifier.fromNamespaceAndPath("crowbar", "controls"));
+    private static final MessageRateLimiter NO_CLAIMS_MESSAGE_LIMITER =
+            new MessageRateLimiter(10_000);
 
     private KeyMapping toggleNameTags;
     private KeyMapping toggleSkins;
@@ -102,7 +104,16 @@ public final class CrowBarClient implements ClientModInitializer {
                     showClaimsLoading(client);
                     continue;
                 }
+                if (!CrowBarState.hasAnyClaimWaypoints()) {
+                    showNoClaimsFound(client);
+                    continue;
+                }
                 CrowBarState.ClaimWaypointMode mode = CrowBarState.cycleClaimWaypointMode();
+                if (mode != CrowBarState.ClaimWaypointMode.OFF
+                        && !CrowBarState.hasSelectedClaimWaypoints()) {
+                    showNoClaimsFound(client);
+                    continue;
+                }
                 showMessage(client, "Claim waypoints: " + switch (mode) {
                     case OFF -> "off";
                     case OWNED -> "owned";
@@ -114,10 +125,12 @@ public final class CrowBarClient implements ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
                 CrowBarState.clearAlliumData();
                 CrowBarState.isIntegratedServer = client.getSingleplayerServer() != null;
+                NO_CLAIMS_MESSAGE_LIMITER.reset();
         });
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
-                CrowBarState.clearAlliumData()
-        );
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+                CrowBarState.clearAlliumData();
+                NO_CLAIMS_MESSAGE_LIMITER.reset();
+        });
     }
 
     private static boolean hasModifiersPressed() {
@@ -163,6 +176,13 @@ public final class CrowBarClient implements ClientModInitializer {
         if (client.player != null) {
             client.player.sendOverlayMessage(
                     Component.literal("Collecting claims... Please wait.").withStyle(ChatFormatting.RED));
+        }
+    }
+
+    private static void showNoClaimsFound(Minecraft client) {
+        if (client.player != null && NO_CLAIMS_MESSAGE_LIMITER.tryAcquire(System.currentTimeMillis())) {
+            client.player.sendOverlayMessage(
+                    Component.literal("No claims found").withStyle(ChatFormatting.RED));
         }
     }
 
