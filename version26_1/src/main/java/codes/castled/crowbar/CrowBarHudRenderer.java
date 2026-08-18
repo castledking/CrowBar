@@ -142,12 +142,7 @@ public final class CrowBarHudRenderer {
                 if (!LocatorBarVisibility.hasRenderSource(
                         false, false, vanillaLocatorVisible, hasSelectedClaims)) return;
                 if (vanillaLocatorVisible) {
-                    for (Player player : client.level.players()) {
-                        UUID uuid = player.getUUID();
-                        if (uuid.equals(cameraEntity.getUUID())) continue;
-                        if (getPlayerInfo(uuid) == null) continue;
-                        addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, player.getX(), player.getY(), player.getZ(), false);
-                    }
+                    addVanillaPlayerWaypointEntries(client, cameraEntity, camera, tickCounter, screenWidth, locatorBarY, entries);
                 }
             }
         }
@@ -232,7 +227,7 @@ public final class CrowBarHudRenderer {
         int dotCenterY = markerY + 4;
         Identifier dotSprite = getDotSpriteForDistance(distance);
 
-        entries.add(new EntryRenderData(uuid, markerX, dotCenterX, dotCenterY, size, distance, dotSprite, arrowSprite, markerVisible, true, null, null));
+        entries.add(new EntryRenderData(uuid, markerX, dotCenterX, dotCenterY, size, distance, dotSprite, arrowSprite, markerVisible, true, null, null, false));
     }
 
     /**
@@ -300,9 +295,61 @@ public final class CrowBarHudRenderer {
             int markerY = locatorBarY - 2;
             int size = calculateSizeFromDistance(distance < 0 ? Float.MAX_VALUE : (float) distance, 9) / 100;
 
-            entries.add(new EntryRenderData(uuid, markerX, markerX + 4, markerY + 4, size, distance, dotSprite, arrowSprite, true, false, color, null));
+            entries.add(new EntryRenderData(uuid, markerX, markerX + 4, markerY + 4, size, distance, dotSprite, arrowSprite, true, false, color, null, false));
         });
         logWaypointCounts(seen[0], seen[1]);
+    }
+
+    /**
+     * Adds the players vanilla is already tracking on its own locator bar.
+     *
+     * <p>Used on a plain server, where nothing feeds CrowBar positions directly. The waypoint
+     * manager is the only source that reaches past the client's entity tracking range — a Paper
+     * server stops sending player entities at 48 blocks while the locator bar keeps tracking them
+     * to 332 and beyond — so reading loaded entities instead left almost every marker on the bar
+     * without a skin, name tag or distance.
+     *
+     * <p>Vanilla still owns the bar in this case and has drawn the dot and its vertical arrow
+     * already, so these entries contribute only the skin and label layers on top.
+     */
+    private static void addVanillaPlayerWaypointEntries(Minecraft client, Entity cameraEntity, Camera camera, DeltaTracker tickCounter, int screenWidth, int locatorBarY, List<EntryRenderData> entries) {
+        ClientPacketListener connection = client.getConnection();
+        if (connection == null) return;
+
+        Level level = cameraEntity.level();
+        TickRateManager tickRateManager = level.tickRateManager();
+        PartialTickSupplier partialTickSupplier = entity -> tickCounter.getGameTimeDeltaPartialTick(!tickRateManager.isEntityFrozen(entity));
+
+        connection.getWaypointManager().forEachWaypoint(cameraEntity, waypoint -> {
+            UUID uuid = waypoint.id().left().orElse(null);
+            if (uuid == null || uuid.equals(cameraEntity.getUUID())) return;
+            if (CrowBarState.isClaimMarker(uuid)) return;
+            // A waypoint with no tab list entry is a marker entity or a datapack waypoint, not a
+            // player, so it has no skin or name to overlay and vanilla's own dot is enough.
+            if (getPlayerInfo(uuid) == null) return;
+
+            double relativeYaw = waypoint.yawAngleToCamera(level, camera, partialTickSupplier);
+            if (!isWithinLocatorView(relativeYaw)) return;
+
+            // Beyond 332 blocks the server sends bearing only and distanceSquared() is infinite.
+            // Carry that through as -1 so the label prints "?m" instead of a nonsense number.
+            double distanceSquared = waypoint.distanceSquared(cameraEntity);
+            double distance = Double.isFinite(distanceSquared) ? Math.sqrt(distanceSquared) : -1.0D;
+
+            Identifier arrowSprite = switch (waypoint.pitchDirectionToCamera(level, client.gameRenderer, partialTickSupplier)) {
+                case UP -> LOCATOR_ARROW_UP;
+                case DOWN -> LOCATOR_ARROW_DOWN;
+                case NONE -> null;
+            };
+
+            int baseX = Mth.ceil((screenWidth - 9.0F) / 2.0F);
+            int markerX = baseX + Mth.floor(relativeYaw * 173.0D / 2.0D / 60.0D);
+            int markerY = locatorBarY - 2;
+            int size = calculateSizeFromDistance(distance < 0 ? Float.MAX_VALUE : (float) distance, 9) / 100;
+
+            entries.add(new EntryRenderData(uuid, markerX, markerX + 4, markerY + 4, size, distance,
+                    null, arrowSprite, true, true, null, null, true));
+        });
     }
 
     /** True when vanilla contributes something besides a player or GPX claim marker. */
@@ -381,11 +428,14 @@ public final class CrowBarHudRenderer {
 
             entries.add(new EntryRenderData(null, markerX, markerX + 4, markerY + 4, 9, distance,
                     CLAIM_BOWTIE_SPRITE, getArrowSpriteForPosition(camera, claim.x(), claim.y(), claim.z()),
-                    true, false, color, claim.name()));
+                    true, false, color, claim.name(), false));
         }
     }
 
     private static void renderLocatorDot(GuiGraphicsExtractor context, EntryRenderData entry) {
+        // Vanilla still owns the bar for this entry and drew the dot and arrow itself; drawing ours
+        // over the top would stack a full-size dot on vanilla's distance-scaled one.
+        if (entry.vanillaDrawsMarker) return;
         if (entry.markerVisible) {
             int dotColor = entry.overrideColor != null ? entry.overrideColor : getDotColor(entry.uuid);
             drawTintedLocatorDot(context, entry.dotCenterX, entry.dotCenterY, entry.dotSprite, dotColor);
@@ -409,8 +459,10 @@ public final class CrowBarHudRenderer {
             String name = entry.isPlayer ? getName(entry.uuid) : entry.label;
             text = name == null ? "" : name;
         }
-        if (CrowBarState.showDistance && entry.distance > 0) {
-            String distanceText = String.format("%.0fm", entry.distance);
+        if (CrowBarState.showDistance) {
+            // A bearing-only waypoint has no distance to report, so say so rather than dropping the
+            // label entirely and leaving the toggle looking dead.
+            String distanceText = entry.distance >= 0 ? String.format("%.0fm", entry.distance) : "?m";
             if (CrowBarState.nameTagsEnabled) {
                 text = text + " " + distanceText;
             } else {
@@ -438,11 +490,14 @@ public final class CrowBarHudRenderer {
      * datapack waypoints); they carry their own {@code overrideColor} from the waypoint icon and
      * have no skin or name to look up.
      *
-     * @param uuid          {@code null} for waypoints identified by a string rather than a UUID
-     * @param overrideColor pre-resolved ARGB, or {@code null} to derive one from {@code uuid}
-     * @param label         text to draw above the marker; players resolve their own from the tab list
+     * @param uuid               {@code null} for waypoints identified by a string rather than a UUID
+     * @param distance           {@code -1} when the server sends bearing only and the range is unknown
+     * @param overrideColor      pre-resolved ARGB, or {@code null} to derive one from {@code uuid}
+     * @param label              text to draw above the marker; players resolve their own from the tab list
+     * @param vanillaDrawsMarker vanilla still owns the bar and drew this dot, so only the skin and
+     *                           label layers are ours
      */
-    private record EntryRenderData(UUID uuid, int markerX, int dotCenterX, int dotCenterY, int size, double distance, Identifier dotSprite, Identifier arrowSprite, boolean markerVisible, boolean isPlayer, Integer overrideColor, String label) {
+    private record EntryRenderData(UUID uuid, int markerX, int dotCenterX, int dotCenterY, int size, double distance, Identifier dotSprite, Identifier arrowSprite, boolean markerVisible, boolean isPlayer, Integer overrideColor, String label, boolean vanillaDrawsMarker) {
     }
 
     private static void drawTintedLocatorDot(GuiGraphicsExtractor context, int centerX, int centerY, Identifier sprite, int color) {
