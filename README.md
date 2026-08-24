@@ -69,10 +69,22 @@ Keybinds can be changed from Minecraft's controls menu under the CrowBar categor
 ## Building
 
 ```bash
-./gradlew :version21:build :version26_1:build :version26_2:build
+./gradlew build
+# or per version/loader:
+./gradlew :version21:fabric:build :version21:neoforge:build
 ```
 
-The built jars are written to `version21/build/libs/`, `version26_1/build/libs/`, and `version26_2/build/libs/`.
+Each supported Minecraft line has `fabric` and `neoforge` subprojects:
+
+| Directory     | Minecraft            | Loaders           |
+| ------------- | -------------------- | ----------------- |
+| `version21`   | 1.21.6 – 1.21.11     | Fabric, NeoForge  |
+| `version26_1` | 26.1.x               | Fabric, NeoForge  |
+| `version26_2` | 26.2.x               | Fabric, NeoForge  |
+
+The built jars are written to `versionXX/<loader>/build/libs/`. Loader-agnostic logic shared by all six jars lives in `common/` and is bundled into each jar.
+
+NeoForge notes: the NeoForge jars use ModDevGradle and compile against official mappings; the 26.x NeoForge subprojects target Java 25 (their Minecraft line requires it), everything else targets Java 21.
 
 ## Links
 

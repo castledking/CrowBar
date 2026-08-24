@@ -1,6 +1,11 @@
 pluginManagement {
+    plugins {
+        // NeoForge subprojects use ModDevGradle.
+        id "net.neoforged.moddev" version "2.0.144"
+    }
     repositories {
         maven { url = "https://maven.fabricmc.net/" }
+        maven { url = "https://maven.neoforged.net/releases/" }
         gradlePluginPortal()
         mavenCentral()
     }
@@ -9,6 +14,7 @@ pluginManagement {
 dependencyResolutionManagement {
     repositories {
         maven { url = "https://maven.fabricmc.net/" }
+        maven { url = "https://maven.neoforged.net/releases/" }
         maven { url = "https://maven.terraformersmc.com/releases/" }
         maven { url = "https://libraries.minecraft.net/" }
         mavenCentral()
@@ -17,6 +23,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "CrowBar"
 include "common"
-include "version21"
-include "version26_2"
-include "version26_1"
+include "version21:fabric", "version21:neoforge"
+include "version26_1:fabric", "version26_1:neoforge"
+include "version26_2:fabric", "version26_2:neoforge"
