@@ -24,6 +24,6 @@ dependencyResolutionManagement {
 rootProject.name = "CrowBar"
 include "common"
 include "version21:fabric", "version21:neoforge"
-include "version21_6:neoforge", "version21_9:neoforge"
+  include "version21_6:fabric", "version21_6:neoforge", "version21_9:neoforge"
 include "version26_1:fabric", "version26_1:neoforge"
 include "version26_2:fabric", "version26_2:neoforge"
