@@ -7,7 +7,7 @@
   <a href="https://castled.codes"><img alt="CASTLED CODEX" src="https://castled.codes/assets/logo-banner.png" width="140" height="35"></a>
 </p>
 
-CrowBar is a Fabric client mod for Minecraft 1.21.6-1.21.11, 26.1.x, and 26.2 that extends the locator bar with readable player name tags, skin markers, distance text, team-colored dots, and a self-view capture mode.
+CrowBar is a client mod for Minecraft 1.21.6-1.21.11, 26.1.x, and 26.2 that extends the locator bar with readable player name tags, skin markers, distance text, team-colored dots, and a self-view capture mode. Available for both Fabric and NeoForge.
 
 ## Features
 
@@ -40,13 +40,24 @@ When [GPExpansion](https://github.com/castledking/GPExpansion) is installed on t
 
 ## Requirements
 
-Use the jar that matches your Minecraft line:
+Use the jar that matches your Minecraft line and loader:
 
-- `CrowBar-1.21.x`: Minecraft 1.21.6-1.21.11, Java 21, Fabric Loader 0.18.4 or newer, Fabric API 0.141.4 or newer.
+### Fabric
+
+- `CrowBar-1.21.6-1.21.8`: Minecraft 1.21.6-1.21.8, Java 21, Fabric Loader 0.18.4 or newer, Fabric API 0.125.0 or newer.
+- `CrowBar-1.21.x`: Minecraft 1.21.9-1.21.11, Java 21, Fabric Loader 0.18.4 or newer, Fabric API 0.141.4 or newer.
 - `CrowBar-26.1.x`: Minecraft 26.1.x, Java 25, Fabric Loader 0.19.2 or newer, Fabric API 0.150.0 or newer.
 - `CrowBar-26.x`: Minecraft 26.2, Java 25, Fabric Loader 0.19.3 or newer, Fabric API 0.152.2 or newer.
 
-Mod Menu is optional, but recommended for the config screen.
+### NeoForge
+
+- `CrowBar-1.21.6-1.21.8-neoforge`: Minecraft 1.21.6-1.21.8, Java 21, NeoForge 21.6 or newer.
+- `CrowBar-1.21.9-1.21.10-neoforge`: Minecraft 1.21.9-1.21.10, Java 21, NeoForge 21.9 or newer.
+- `CrowBar-1.21.x-neoforge`: Minecraft 1.21.11, Java 21, NeoForge 21.11 or newer.
+- `CrowBar-26.1.x-neoforge`: Minecraft 26.1.x, Java 25, NeoForge 26.1 or newer.
+- `CrowBar-26.2.x-neoforge`: Minecraft 26.2, Java 25, NeoForge 26.2 or newer.
+
+Mod Menu is optional on Fabric, but recommended for the config screen. NeoForge uses the settings screen extension point instead.
 
 ## Controls
 
@@ -61,30 +72,40 @@ Keybinds can be changed from Minecraft's controls menu under the CrowBar categor
 
 ## Installation
 
+### Fabric
+
 1. Install Fabric Loader for your Minecraft version.
 2. Install Fabric API.
 3. Put the matching CrowBar jar into your `mods` folder.
 4. Launch the game.
+
+### NeoForge
+
+1. Install NeoForge for your Minecraft version.
+2. Put the matching CrowBar NeoForge jar into your `mods` folder.
+3. Launch the game.
 
 ## Building
 
 ```bash
 ./gradlew build
 # or per version/loader:
-./gradlew :version21:fabric:build :version21:neoforge:build
+./gradlew :version21_6:fabric:build :version21_6:neoforge:build :version21_9:fabric:build :version21_9:neoforge:build :version21:neoforge:build
 ```
 
 Each supported Minecraft line has `fabric` and `neoforge` subprojects:
 
 | Directory     | Minecraft            | Loaders           |
 | ------------- | -------------------- | ----------------- |
-| `version21`   | 1.21.6 – 1.21.11     | Fabric, NeoForge  |
+| `version21_6` | 1.21.6 – 1.21.8     | Fabric, NeoForge  |
+| `version21_9` | 1.21.9 – 1.21.11    | Fabric, NeoForge  |
+| `version21`   | 1.21.11              | NeoForge          |
 | `version26_1` | 26.1.x               | Fabric, NeoForge  |
 | `version26_2` | 26.2.x               | Fabric, NeoForge  |
 
-The built jars are written to `versionXX/<loader>/build/libs/`. Loader-agnostic logic shared by all six jars lives in `common/` and is bundled into each jar.
+The built jars are written to `versionXX/<loader>/build/libs/`. Loader-agnostic logic shared by all jars lives in `common/` and is bundled into each jar.
 
-NeoForge notes: the NeoForge jars use ModDevGradle and compile against official mappings; the 26.x NeoForge subprojects target Java 25 (their Minecraft line requires it), everything else targets Java 21.
+NeoForge notes: the NeoForge jars use ModDevGradle and compile against official mappings; the 26.x NeoForge subprojects target Java 25 (their Minecraft line requires it), everything else targets Java 21. NeoForge builds are split per Minecraft line because Mojang's class renames (e.g. `ResourceLocation` → `Identifier` in 1.21.11) change the API surface.
 
 ## Links
 
