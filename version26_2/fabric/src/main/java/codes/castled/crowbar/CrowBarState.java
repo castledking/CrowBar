@@ -216,7 +216,10 @@ public final class CrowBarState {
 
     public static void checkXpGain(net.minecraft.world.entity.player.Player player) {
         if (player == null) return;
-        if (player.gameMode().isSurvival() == false) return;
+        // gameMode() can be null before the server sends the initial game mode
+        // (e.g. during anti-bot verification on login), so guard against it.
+        net.minecraft.world.level.GameType gameMode = player.gameMode();
+        if (gameMode == null || gameMode.isSurvival() == false) return;
 
         int currentLevel = player.experienceLevel;
         float currentProgress = player.experienceProgress;
