@@ -1,0 +1,71 @@
+plugins {
+    id "net.neoforged.moddev"
+}
+
+group = rootProject.maven_group
+version = rootProject.mod_version
+
+base {
+    archivesName = project.archives_base_name
+}
+
+neoForge {
+    version = project.neoforge_version
+
+    // The NeoForm runtime bundled with ModDevGradle 2.0.144 fails to recompile the
+    // decompiled 26.3 sources (HolderSet$1 access-privilege error); newer runtimes don't.
+    neoFormRuntime {
+        version = project.neoform_runtime_version
+    }
+
+    runs {
+        client {
+            client()
+            gameDirectory = file("run")
+        }
+    }
+
+    mods {
+        crowbar {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    implementation project(":common")
+}
+
+// Bundle the loader-agnostic common classes directly into the mod jar.
+tasks.named("jar", Jar) {
+    manifest {
+        attributes "Implementation-Version": project.version
+    }
+    from project(":common").sourceSets.main.output
+}
+
+processResources {
+    inputs.property "version", project.version
+    inputs.property "neoforge_dependency", project.neoforge_dependency
+    inputs.property "minecraft_dependency", project.minecraft_dependency
+
+    Map<String, String> expansions = [
+            "mod_version"         : project.version.toString(),
+            "neoforge_dependency": project.neoforge_dependency,
+            "minecraft_dependency": project.minecraft_dependency
+    ]
+
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand expansions
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
