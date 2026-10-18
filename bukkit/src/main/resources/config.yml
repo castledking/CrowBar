@@ -1,0 +1,109 @@
+# CrowBar server plugin
+#
+# Sends players who have the CrowBar client mod the positions of other players, and the
+# GriefPrevention claims they can see. Players without CrowBar are unaffected, apart from the
+# optional vanilla claim markers below. Nobody needs CrowBar for the server to run this.
+
+player-locator:
+  # Send player positions to CrowBar clients. This lets CrowBar show players beyond the server's
+  # player tracking range, which on Minecraft 1.21-1.21.5 is otherwise all it can see.
+  enabled: true
+  # Allium Essentials sends the same data. While Allium is installed, let it do that instead of
+  # sending everything twice.
+  defer-to-allium: true
+  # Ticks between updates. 1 is the smoothest; higher values use less bandwidth.
+  update-interval-ticks: 2
+  # The farthest away a player can be and still appear, in blocks. 0 means no limit.
+  max-distance: 0
+
+# Players are left out of the data entirely while any of these apply, so their position never
+# reaches anyone's client. The defaults match the vanilla locator bar from Minecraft 1.21.6 on.
+# Players with crowbar.locator.see-hidden (default: op, like Allium's allium.crowbar) still see
+# players who are sneaking, invisible, spectating or wearing a head item. Vanished players stay
+# hidden from anyone the vanish plugin hides them from.
+hide-when:
+  sneaking: true
+  invisible: true
+  spectating: true
+  # Hidden from the viewer by a vanish plugin.
+  vanished: true
+  # Wearing any of these on the head hides a player.
+  head-items:
+    - CARVED_PUMPKIN
+    - PLAYER_HEAD
+    - ZOMBIE_HEAD
+    - SKELETON_SKULL
+    - WITHER_SKELETON_SKULL
+    - CREEPER_HEAD
+    - PIGLIN_HEAD
+    - DRAGON_HEAD
+
+# Makes positions vaguer so players cannot be pinpointed or triangulated from the bar.
+precision:
+  # Rounds each direction to this many steps per axis. 300 is fine enough to look smooth while
+  # still hiding a player's exact position at range. 0 sends exact directions.
+  direction-steps: 0
+  # Send how far away players are. When off, CrowBar shows only which way they are and prints
+  # "?m" for the distance.
+  send-distance: true
+  # Beyond this many blocks, distances are rounded to the nearest multiple of round-distance-to.
+  round-distance-beyond: 200
+  # 0 never rounds.
+  round-distance-to: 0
+
+colors:
+  # How each player's dot is colored for everyone else:
+  #   team      the player's scoreboard team color, otherwise a color unique to them
+  #   unique    a color unique to each player
+  #   constant  every player uses constant-color
+  #   custom    players choose their own with /crowbar color or "Your dot color" in CrowBar's
+  #             settings screen, otherwise unique
+  # Each CrowBar client can still override this in its own settings, unless client-appearance
+  # below sets dot-colors.
+  mode: team
+  constant-color: '#FFFFFF'
+  # Colors that always win, by player name. Example:
+  #   steve: '#55FFFF'
+  players: {}
+
+claim-waypoints:
+  # Show GriefPrevention claims on the locator bar as bowtie markers, to their owner and to players
+  # trusted on them. Needs GriefPrevention or GriefPrevention3D. Turns itself off while GPExpansion
+  # is installed, since GPExpansion publishes the same markers with more options.
+  enabled: true
+  # Also show claim markers to players without CrowBar, through the vanilla locator bar. Needs a
+  # Paper server and Minecraft 1.21.6 or newer; otherwise only CrowBar clients see claims.
+  vanilla-markers: true
+  # How far away a claim can be and still get a vanilla marker, in blocks. CrowBar clients see
+  # every claim they have access to, at any distance.
+  vanilla-marker-range: 1000
+  # Show subdivisions as well as top-level claims.
+  subdivisions: false
+  # Show admin claims to players with crowbar.claims.admin.
+  admin-claims: false
+
+# Appearance settings for CrowBar clients while they play here. "player" leaves a setting to each
+# player; anything else chooses it for everyone, and their settings screen greys it out. Players can
+# still turn off "Server appearance" in CrowBar's settings to keep their own.
+client-appearance:
+  # A dark plate behind each label: true or false.
+  label-background: player
+  # Lift hearts, hunger, the experience level and chat above the labels: true or false.
+  raise-hud: player
+  # Dim every label except the one nearest the crosshair: true or false.
+  dim-other-labels: player
+  # Skip labels that would overlap one nearer the crosshair: true or false.
+  hide-overlapping-labels: player
+  # Draw faces inside a frame in the player's dot color: true or false.
+  skin-frame: player
+  # Arrows for players far above or below: true or false.
+  height-arrows: player
+  # Fade markers between fade-start and fade-end blocks away, down to fade-end-opacity (0.0-1.0).
+  fade-distant-markers: player
+  fade-start: player
+  fade-end: player
+  fade-end-opacity: player
+  # team: the color this server sends (see colors above), per-player: a color unique to each
+  # player, single: everyone in dot-color (#RRGGBB).
+  dot-colors: player
+  dot-color: player

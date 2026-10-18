@@ -14,6 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class CrowBarState {
     private static final long XP_BAR_VISIBLE_DURATION_MS = 5000;
 
+    // What the renderers draw this tick, resolved from the config and any held keys by
+    // syncFeatures(). Change the config instead of assigning these.
     public static boolean nameTagsEnabled = true;
     public static boolean skinsEnabled = true;
     public static boolean viewSelfEnabled = false;
@@ -102,6 +104,15 @@ public final class CrowBarState {
         claimDataReceived = false;
     }
     public static boolean isIntegratedServer = false;
+
+    /** Resolves the feature switches for this tick from the config and held feature keys. */
+    public static void syncFeatures() {
+        CrowBarConfig config = CrowBarConfigStore.config();
+        nameTagsEnabled = FeatureKeys.isActive(config, CrowBarFeature.NAME_TAGS);
+        skinsEnabled = FeatureKeys.isActive(config, CrowBarFeature.SKINS);
+        viewSelfEnabled = FeatureKeys.isActive(config, CrowBarFeature.VIEW_SELF);
+        showDistance = FeatureKeys.isActive(config, CrowBarFeature.SHOW_DISTANCE);
+    }
 
     private static int lastExperienceLevel = -1;
     private static float lastExperienceProgress = -1f;

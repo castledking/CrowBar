@@ -27,6 +27,7 @@ import net.minecraft.world.waypoints.PartialTickSupplier;
 import net.minecraft.world.waypoints.TrackedWaypoint;
 import net.minecraft.world.waypoints.Waypoint;
 import net.minecraft.world.waypoints.WaypointStyleAssets;
+import net.minecraft.client.resources.DefaultPlayerSkin;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -56,9 +57,45 @@ public final class CrowBarHudRenderer {
     private static final Identifier CLAIM_BOWTIE_SPRITE =
             Identifier.withDefaultNamespace("hud/locator_bar_dot/bowtie");
 
-    private static final float GOLDEN_ANGLE = 137.508f;
+    /** Square frame drawn around a face in the player's dot colour when the skin frame is on. */
+    private static final Identifier SKIN_FRAME = Identifier.fromNamespaceAndPath("crowbar", "hud/skin_frame");
+
+    private static final int LABEL_PADDING_X = 4;
+    private static final int LABEL_PADDING_Y = 2;
+    private static final int LABEL_BACKGROUND_ALPHA = 0xC0;
+    private static final int UNFOCUSED_LABEL_ALPHA = 0x70;
+
+    /** Labels from this frame's marker pass, drawn together so overlap culling spans every marker. */
+    private static final List<QueuedLabel> QUEUED_LABELS = new ArrayList<>();
 
     private CrowBarHudRenderer() {
+    }
+
+    /** Starts a HUD frame: advances the HUD lift and drops labels a skipped frame left behind. */
+    public static void beginFrame() {
+        QUEUED_LABELS.clear();
+        HudLift.INSTANCE.beginFrame(System.nanoTime(), CrowBarConfigStore.effective().raiseHud);
+    }
+
+    /**
+     * Moves what is extracted next up by the current HUD lift.
+     *
+     * @return whether a matrix was pushed, to hand back to {@link #popHudLift}
+     */
+    public static boolean pushHudLift(GuiGraphicsExtractor context) {
+        float offset = HudLift.INSTANCE.offset();
+        if (offset <= 0f) return false;
+        context.pose().pushMatrix();
+        context.pose().translate(0f, -offset);
+        return true;
+    }
+
+    /** Undoes {@link #pushHudLift}; always returns {@code false} so callers can reset their flag. */
+    public static boolean popHudLift(GuiGraphicsExtractor context, boolean pushed) {
+        if (pushed) {
+            context.pose().popMatrix();
+        }
+        return false;
     }
 
     /**
@@ -111,7 +148,6 @@ public final class CrowBarHudRenderer {
         if (cameraEntity == null) return;
 
         Camera camera = client.gameRenderer.mainCamera();
-        Font font = client.font;
         int screenWidth = context.guiWidth();
         int screenHeight = context.guiHeight();
         int locatorBarY = screenHeight - 29;
@@ -125,7 +161,7 @@ public final class CrowBarHudRenderer {
                 if (alliumData.isExpired()) continue;
                 hasAlliumSource = true;
                 UUID uuid = alliumData.uuid;
-                addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, alliumData.x, alliumData.y, alliumData.z, true);
+                addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, alliumData.x, alliumData.y, alliumData.z, true, alliumData.bearingOnly);
             }
 
             boolean hasIntegratedServerSource = client.getSingleplayerServer() != null;
@@ -133,7 +169,7 @@ public final class CrowBarHudRenderer {
                 for (ServerPlayer player : client.getSingleplayerServer().getPlayerList().getPlayers()) {
                     UUID uuid = player.getUUID();
                     if (uuid.equals(cameraEntity.getUUID())) continue;
-                    addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, player.getX(), player.getY(), player.getZ(), false);
+                    addEntryForPosition(cameraEntity, camera, screenWidth, locatorBarY, entries, uuid, player.getX(), player.getY(), player.getZ(), false, false);
                 }
             }
 
@@ -185,21 +221,16 @@ public final class CrowBarHudRenderer {
             }
         }
 
-        if (LocatorBarVisibility.shouldRenderLabels(
-                CrowBarState.nameTagsEnabled, CrowBarState.showDistance)) {
-            for (EntryRenderData entry : entries) {
-                if (!entry.markerVisible) continue;
-                if (entry == closest) continue;
-                renderLocatorLabel(context, font, entry, false);
-            }
-
-            if (closest != null) {
-                renderLocatorLabel(context, font, closest, true);
-            }
+        for (EntryRenderData entry : entries) {
+            queueEntryLabel(entry);
         }
+        drawQueuedLabels(context);
     }
 
-    private static void addEntryForPosition(Entity cameraEntity, Camera camera, int screenWidth, int locatorBarY, List<EntryRenderData> entries, UUID uuid, double x, double y, double z, boolean allowVerticalArrow) {
+    /**
+     * @param bearingOnly the position only gives a direction, so the distance is reported as unknown
+     */
+    private static void addEntryForPosition(Entity cameraEntity, Camera camera, int screenWidth, int locatorBarY, List<EntryRenderData> entries, UUID uuid, double x, double y, double z, boolean allowVerticalArrow, boolean bearingOnly) {
         if (uuid.equals(cameraEntity.getUUID())) return;
 
         Vec3 cameraPosition = camera.position();
@@ -209,7 +240,7 @@ public final class CrowBarHudRenderer {
                 cameraPosition.x(), cameraPosition.z(), camera.yRot(), x, z);
 
         double deltaY = y - cameraPosition.y();
-        double distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+        double distance = bearingOnly ? -1.0D : Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
         boolean markerVisible = isWithinLocatorView(relativeYaw);
         if (!markerVisible) return;
 
@@ -221,11 +252,11 @@ public final class CrowBarHudRenderer {
         int markerX = baseX + Mth.floor(relativeYaw * 173.0D / 2.0D / 60.0D);
         int markerY = locatorBarY - 2;
 
-        int sizeHundredths = calculateSizeFromDistance((float) distance, 9);
+        int sizeHundredths = calculateSizeFromDistance(distance < 0 ? Float.MAX_VALUE : (float) distance, 9);
         int size = sizeHundredths / 100;
         int dotCenterX = markerX + 4;
         int dotCenterY = markerY + 4;
-        Identifier dotSprite = getDotSpriteForDistance(distance);
+        Identifier dotSprite = getDotSpriteForDistance(distance < 0 ? Double.MAX_VALUE : distance);
 
         entries.add(new EntryRenderData(uuid, markerX, dotCenterX, dotCenterY, size, distance, dotSprite, arrowSprite, markerVisible, true, null, null, false));
     }
@@ -341,13 +372,19 @@ public final class CrowBarHudRenderer {
                 case NONE -> null;
             };
 
+            // Vanilla's own sprite and colour, so a repainted dot covers vanilla's exactly and Team
+            // colouring keeps the colour vanilla chose.
+            Waypoint.Icon icon = waypoint.icon();
+            Identifier vanillaSprite = client.gui.hud.getWaypointStyles().get(icon.style).sprite(Mth.sqrt((float) distanceSquared));
+            int vanillaColor = icon.color.orElseGet(() -> ARGB.setBrightness(ARGB.color(255, uuid.hashCode()), 0.9F));
+
             int baseX = Mth.ceil((screenWidth - 9.0F) / 2.0F);
             int markerX = baseX + Mth.floor(relativeYaw * 173.0D / 2.0D / 60.0D);
             int markerY = locatorBarY - 2;
             int size = calculateSizeFromDistance(distance < 0 ? Float.MAX_VALUE : (float) distance, 9) / 100;
 
             entries.add(new EntryRenderData(uuid, markerX, markerX + 4, markerY + 4, size, distance,
-                    null, arrowSprite, true, true, null, null, true));
+                    vanillaSprite, arrowSprite, true, true, vanillaColor, null, true));
         });
     }
 
@@ -432,52 +469,135 @@ public final class CrowBarHudRenderer {
     }
 
     private static void renderLocatorDot(GuiGraphicsExtractor context, EntryRenderData entry) {
-        // Vanilla still owns the bar for this entry and drew the dot and arrow itself; drawing ours
-        // over the top would stack a full-size dot on vanilla's distance-scaled one.
-        if (entry.vanillaDrawsMarker) return;
-        if (entry.markerVisible) {
-            int dotColor = entry.overrideColor != null ? entry.overrideColor : getDotColor(entry.uuid);
-            drawTintedLocatorDot(context, entry.dotCenterX, entry.dotCenterY, entry.dotSprite, dotColor);
+        if (!entry.markerVisible) return;
+        CrowBarConfig config = CrowBarConfigStore.effective();
+        // A framed face stands in for the dot, so drawing the dot underneath would only show
+        // through as a smudge around the frame.
+        boolean framed = config.skinBorder && entry.isPlayer && CrowBarState.skinsEnabled && hasSkin(entry.uuid);
+
+        if (entry.vanillaDrawsMarker) {
+            // Vanilla still owns the bar for this entry and drew the dot and arrow itself. Team
+            // colouring leaves that dot alone; any other colour repaints it with vanilla's own
+            // sprite, so the new dot covers the old one exactly.
+            if (config.dotColorMode != DotColorMode.TEAM && !framed && entry.dotSprite != null) {
+                drawTintedLocatorDot(context, entry.dotCenterX, entry.dotCenterY, entry.dotSprite,
+                        DotColors.forPlayer(config, entry.uuid, null));
+            }
+            return;
         }
-        if (entry.arrowSprite != null) {
-            drawVerticalArrow(context, entry.dotCenterX, entry.dotCenterY, entry.arrowSprite);
+
+        int alpha = MarkerFade.alpha(config, entry.distance);
+        if (!framed) {
+            int dotColor = entry.overrideColor != null ? entry.overrideColor : getDotColor(entry.uuid);
+            drawTintedLocatorDot(context, entry.dotCenterX, entry.dotCenterY, entry.dotSprite, DotColors.withAlpha(dotColor, alpha));
+        }
+        if (entry.arrowSprite != null && config.heightArrows) {
+            drawVerticalArrow(context, entry.dotCenterX, entry.dotCenterY, entry.arrowSprite, alpha);
         }
     }
 
     private static void renderLocatorSkin(GuiGraphicsExtractor context, EntryRenderData entry) {
         if (!entry.markerVisible || !entry.isPlayer) return;
-        renderPlayerFace(context, entry.uuid, entry.dotCenterX - entry.size / 2, entry.dotCenterY - entry.size / 2, entry.size);
+        CrowBarConfig config = CrowBarConfigStore.effective();
+        int frameColor;
+        if (!entry.vanillaDrawsMarker) {
+            frameColor = getDotColor(entry.uuid);
+        } else if (config.dotColorMode == DotColorMode.TEAM && entry.overrideColor != null) {
+            frameColor = entry.overrideColor;
+        } else {
+            frameColor = DotColors.forPlayer(config, entry.uuid, null);
+        }
+        renderPlayerFace(context, entry.uuid, entry.dotCenterX, entry.dotCenterY, entry.size, frameColor,
+                MarkerFade.alpha(config, entry.distance));
     }
 
-    private static void renderLocatorLabel(GuiGraphicsExtractor context, Font font, EntryRenderData entry, boolean isClosest) {
+    private static void queueEntryLabel(EntryRenderData entry) {
         if (!entry.markerVisible) return;
-        String text = "";
-        if (CrowBarState.nameTagsEnabled) {
-            // Players resolve through the tab list; claim markers only have a name if the server
-            // sent one, and stay unlabelled otherwise rather than showing a raw UUID.
-            String name = entry.isPlayer ? getName(entry.uuid) : entry.label;
-            text = name == null ? "" : name;
+        CrowBarConfig config = CrowBarConfigStore.effective();
+        // Players resolve through the tab list; claim markers only have a name if the server
+        // sent one, and stay unlabelled otherwise rather than showing a raw UUID.
+        String name = !CrowBarState.nameTagsEnabled ? null : entry.isPlayer ? getName(entry.uuid) : entry.label;
+        int textY = entry.dotCenterY - entry.size / 2 - 12;
+        // Vanilla draws its own arrows regardless of the height arrow setting.
+        if (LOCATOR_ARROW_UP.equals(entry.arrowSprite) && (entry.vanillaDrawsMarker || config.heightArrows)) {
+            textY -= LOCATOR_ARROW_HEIGHT + 1;
         }
+        queueLabel(labelText(name, entry.distance), entry.dotCenterX, textY, MarkerFade.alpha(config, entry.distance));
+    }
+
+    /**
+     * Builds a marker label from the enabled parts.
+     *
+     * @param name     the name to show, or {@code null} when name tags are off or there is none
+     * @param distance blocks to the target, or negative when the server sent a bearing only
+     */
+    private static String labelText(String name, double distance) {
+        String text = name == null ? "" : name;
         if (CrowBarState.showDistance) {
             // A bearing-only waypoint has no distance to report, so say so rather than dropping the
             // label entirely and leaving the toggle looking dead.
-            String distanceText = entry.distance >= 0 ? String.format("%.0fm", entry.distance) : "?m";
-            if (CrowBarState.nameTagsEnabled) {
-                text = text + " " + distanceText;
-            } else {
-                text = distanceText;
-            }
+            String distanceText = distance >= 0 ? String.format("%.0fm", distance) : "?m";
+            text = text.isEmpty() ? distanceText : text + " " + distanceText;
         }
+        return text;
+    }
 
-        if (!text.isEmpty()) {
-            int textColor = isClosest ? 0xFFFFFFFF : 0x70FFFFFF;
-            int textWidth = font.width(text);
-            int textX = entry.dotCenterX - textWidth / 2;
-            int textY = entry.dotCenterY - entry.size / 2 - 12;
-            if (LOCATOR_ARROW_UP.equals(entry.arrowSprite)) {
-                textY -= LOCATOR_ARROW_HEIGHT + 1;
-            }
-            context.text(font, text, textX, textY, textColor);
+    private static void queueLabel(String text, int centerX, int y, int alpha) {
+        if (text == null || text.isEmpty()) return;
+        int width = Minecraft.getInstance().font.width(text);
+        QUEUED_LABELS.add(new QueuedLabel(text, centerX, y, width, alpha));
+    }
+
+    /** Draws every label queued this frame, after all markers so no dot or face covers one. */
+    private static void drawQueuedLabels(GuiGraphicsExtractor context) {
+        if (QUEUED_LABELS.isEmpty()) return;
+        CrowBarConfig config = CrowBarConfigStore.effective();
+        Font font = Minecraft.getInstance().font;
+        int screenCenter = context.guiWidth() / 2;
+        int padding = config.labelBackground ? LABEL_PADDING_X : 0;
+
+        List<QueuedLabel> labels = config.hideOverlappingLabels
+                ? LabelLayout.withoutOverlaps(QUEUED_LABELS,
+                        label -> label.left() - padding,
+                        label -> label.left() + label.width() + padding,
+                        label -> Math.abs(label.centerX() - screenCenter))
+                : List.copyOf(QUEUED_LABELS);
+        QUEUED_LABELS.clear();
+
+        QueuedLabel focused = labels.stream()
+                .min(Comparator.comparingInt(label -> Math.abs(label.centerX() - screenCenter)))
+                .orElse(null);
+        for (QueuedLabel label : labels) {
+            if (label != focused) drawLabel(context, font, label, false, config);
+        }
+        if (focused != null) {
+            drawLabel(context, font, focused, true, config);
+        }
+    }
+
+    private static void drawLabel(GuiGraphicsExtractor context, Font font, QueuedLabel label, boolean focused, CrowBarConfig config) {
+        int alpha = label.alpha() * (focused || !config.dimUnfocusedLabels ? 255 : UNFOCUSED_LABEL_ALPHA) / 255;
+        // Text extraction treats an alpha below 4 as "no alpha given" and draws it opaque.
+        if (alpha < 4) return;
+
+        int x = label.left();
+        int y = label.y();
+        int color = (alpha << 24) | 0xFFFFFF;
+        if (config.labelBackground) {
+            context.fill(x - LABEL_PADDING_X, y - LABEL_PADDING_Y,
+                    x + label.width() - 1 + LABEL_PADDING_X, y + font.lineHeight - 1 + LABEL_PADDING_Y,
+                    (LABEL_BACKGROUND_ALPHA * alpha / 255) << 24);
+            context.text(font, label.text(), x, y, color, false);
+            HudLift.INSTANCE.requestClearance(y - LABEL_PADDING_Y, context.guiHeight());
+        } else {
+            context.text(font, label.text(), x, y, color);
+            HudLift.INSTANCE.requestClearance(y - 1, context.guiHeight());
+        }
+    }
+
+    private record QueuedLabel(String text, int centerX, int y, int width, int alpha) {
+        int left() {
+            return centerX - width / 2;
         }
     }
 
@@ -491,10 +611,11 @@ public final class CrowBarHudRenderer {
      *
      * @param uuid               {@code null} for waypoints identified by a string rather than a UUID
      * @param distance           {@code -1} when the server sends bearing only and the range is unknown
-     * @param overrideColor      pre-resolved ARGB, or {@code null} to derive one from {@code uuid}
+     * @param overrideColor      pre-resolved ARGB, or {@code null} to derive one from {@code uuid};
+     *                           for a vanilla-drawn player, the colour vanilla gave the dot
      * @param label              text to draw above the marker; players resolve their own from the tab list
      * @param vanillaDrawsMarker vanilla still owns the bar and drew this dot, so only the skin and
-     *                           label layers are ours
+     *                           label layers are ours; {@code dotSprite} is then vanilla's sprite
      */
     private record EntryRenderData(UUID uuid, int markerX, int dotCenterX, int dotCenterY, int size, double distance, Identifier dotSprite, Identifier arrowSprite, boolean markerVisible, boolean isPlayer, Integer overrideColor, String label, boolean vanillaDrawsMarker) {
     }
@@ -534,47 +655,44 @@ public final class CrowBarHudRenderer {
         return targetPitch - camera.xRot();
     }
 
-    private static void drawVerticalArrow(GuiGraphicsExtractor context, int centerX, int centerY, Identifier sprite) {
+    private static void drawVerticalArrow(GuiGraphicsExtractor context, int centerX, int centerY, Identifier sprite, int alpha) {
         int x = centerX - LOCATOR_ARROW_WIDTH / 2;
         int y = LOCATOR_ARROW_DOWN.equals(sprite)
                 ? centerY + LOCATOR_DOT_SIZE / 2 + 1
                 : centerY - LOCATOR_DOT_SIZE / 2 - LOCATOR_ARROW_HEIGHT;
-        context.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, LOCATOR_ARROW_WIDTH, LOCATOR_ARROW_HEIGHT, 0xFFFFFFFF);
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, LOCATOR_ARROW_WIDTH, LOCATOR_ARROW_HEIGHT, DotColors.withAlpha(0xFFFFFFFF, alpha));
     }
 
     private static int getDotColor(UUID uuid) {
-        Minecraft client = Minecraft.getInstance();
+        return DotColors.forPlayer(CrowBarConfigStore.effective(), uuid, getTeamColor(uuid));
+    }
 
+    /**
+     * The player's team colour as ARGB, or {@code null} without one.
+     *
+     * <p>Allium's colour wins because the server applies its own fallback rules; otherwise a loaded
+     * player's scoreboard team counts, except plain white, which is what "no colour" looks like.
+     */
+    private static Integer getTeamColor(UUID uuid) {
         AlliumPlayerData alliumData = CrowBarState.alliumPlayerData.get(uuid);
         if (alliumData != null && !alliumData.isExpired()) {
-            int rgb = alliumData.teamColor & 0xFFFFFF;
-            return 0xFF000000 | rgb;
+            return 0xFF000000 | (alliumData.teamColor & 0xFFFFFF);
         }
 
+        Minecraft client = Minecraft.getInstance();
         if (client.level != null) {
             Player player = client.level.getPlayerInAnyDimension(uuid);
             if (player != null) {
-                int teamColor = getTeamColor(player);
+                int teamColor = getScoreboardTeamColor(player);
                 if ((teamColor & 0xFFFFFF) != 0xFFFFFF) {
                     return teamColor;
                 }
             }
         }
-
-        int fallback = getMojangishGeneratedColor(uuid);
-        return fallback;
+        return null;
     }
 
-    private static int getMojangishGeneratedColor(UUID uuid) {
-        long hash = uuid.hashCode() & 0xffffffffL;
-        float hue = (hash * GOLDEN_ANGLE) % 360f;
-        float saturation = 0.75f + ((hash >> 8) & 0xFF) / 255f * 0.20f;
-        float brightness = 0.85f + ((hash >> 16) & 0xFF) / 255f * 0.15f;
-        int rgb = java.awt.Color.HSBtoRGB(hue / 360f, saturation, brightness) & 0xFFFFFF;
-        return 0xFF000000 | rgb;
-    }
-
-    private static int getTeamColor(Player player) {
+    private static int getScoreboardTeamColor(Player player) {
         PlayerTeam team = player.getTeam();
 
         if (team == null) {
@@ -614,10 +732,19 @@ public final class CrowBarHudRenderer {
         if (Minecraft.getInstance().player != null && Minecraft.getInstance().player.getUUID().equals(uuid)) {
             return Minecraft.getInstance().player.getName().getString();
         }
+        AlliumPlayerData positioned = CrowBarState.alliumPlayerData.get(uuid);
+        if (positioned != null && positioned.name != null) {
+            return positioned.name;
+        }
         return uuid.toString();
     }
 
-    private static void renderPlayerFace(GuiGraphicsExtractor context, UUID uuid, int x, int y, int size) {
+    private static boolean hasSkin(UUID uuid) {
+        return getPlayerInfo(uuid) != null || getLoadedPlayerSkin(uuid) != null;
+    }
+
+    /** Draws a face centred on the marker, framed in {@code frameColor} when the skin frame is on. */
+    private static void renderPlayerFace(GuiGraphicsExtractor context, UUID uuid, int centerX, int centerY, int size, int frameColor, int alpha) {
         PlayerInfo entry = getPlayerInfo(uuid);
         PlayerSkin skin = entry != null ? entry.getSkin() : getLoadedPlayerSkin(uuid);
         if (skin == null) {
@@ -627,7 +754,15 @@ public final class CrowBarHudRenderer {
         boolean showHat = entry == null || entry.showHat();
         boolean upsideDown = isPlayerUpsideDown(uuid);
         Identifier texture = skin.body().texturePath();
-        PlayerFaceExtractor.extractRenderState(context, texture, x, y, size, showHat, upsideDown, -1);
+        int x = centerX - size / 2;
+        int y = centerY - size / 2;
+        int tint = DotColors.withAlpha(0xFFFFFFFF, alpha);
+        if (CrowBarConfigStore.effective().skinBorder) {
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, SKIN_FRAME, x, y, size, size, DotColors.withAlpha(frameColor, alpha));
+            PlayerFaceExtractor.extractRenderState(context, texture, x + 1, y + 1, size - 2, showHat, upsideDown, tint);
+        } else {
+            PlayerFaceExtractor.extractRenderState(context, texture, x, y, size, showHat, upsideDown, tint);
+        }
     }
 
     private static PlayerInfo getPlayerInfo(UUID uuid) {
@@ -645,6 +780,11 @@ public final class CrowBarHudRenderer {
         Player player = getLoadedPlayer(uuid);
         if (player instanceof AbstractClientPlayer clientPlayer) {
             return clientPlayer.getSkin();
+        }
+        AlliumPlayerData positioned = CrowBarState.alliumPlayerData.get(uuid);
+        if (positioned != null && positioned.name != null) {
+            // Named by the server but not in the tab list, like the plugin's fake markers.
+            return DefaultPlayerSkin.get(uuid);
         }
         return null;
     }
@@ -675,11 +815,15 @@ public final class CrowBarHudRenderer {
         int iconCenterX = context.guiWidth() / 2;
         int iconCenterY = barY + 2;
 
-        int dotColor = getDotColor(client.player.getUUID());
-        drawTintedLocatorDot(context, iconCenterX, iconCenterY, LOCATOR_DOT_SPRITES[0], dotColor);
+        UUID uuid = client.player.getUUID();
+        int dotColor = DotColors.forSelf(CrowBarConfigStore.effective(), uuid, getTeamColor(uuid));
+        boolean framed = CrowBarState.skinsEnabled && CrowBarConfigStore.effective().skinBorder && hasSkin(uuid);
+        if (!framed) {
+            drawTintedLocatorDot(context, iconCenterX, iconCenterY, LOCATOR_DOT_SPRITES[0], dotColor);
+        }
 
         if (CrowBarState.skinsEnabled) {
-            renderPlayerFace(context, client.player.getUUID(), iconCenterX - iconSize / 2, iconCenterY - iconSize / 2, iconSize);
+            renderPlayerFace(context, uuid, iconCenterX, iconCenterY, iconSize, dotColor, 255);
         }
 
         if (CrowBarState.nameTagsEnabled) {

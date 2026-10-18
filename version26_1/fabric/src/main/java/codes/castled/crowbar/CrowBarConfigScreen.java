@@ -2,10 +2,32 @@ package codes.castled.crowbar;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.options.controls.KeyBindsScreen;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.network.chat.CommonComponents;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Component;
 
+import java.util.List;
+
+/**
+ * CrowBar's settings, opened from Mod Menu or the settings key.
+ *
+ * <p>The options themselves live in {@link ConfigOptions}; this screen only lays them out as
+ * vanilla buttons in two columns under a row of tabs.
+ */
 public final class CrowBarConfigScreen extends Screen {
+    private static final int BUTTON_WIDTH = 150;
+    private static final int BUTTON_HEIGHT = 20;
+    private static final int COLUMN_GAP = 10;
+    private static final int ROW_SPACING = 24;
+    private static final int TAB_WIDTH = 100;
+    private static final int TAB_GAP = 4;
+
+    /** Reopening the screen returns to the tab you were last on. */
+    private static ConfigOptions.Tab lastTab = ConfigOptions.Tab.GENERAL;
+
     private final Screen parent;
 
     public CrowBarConfigScreen(Screen parent) {
@@ -15,54 +37,53 @@ public final class CrowBarConfigScreen extends Screen {
 
     @Override
     protected void init() {
-        int buttonWidth = 180;
-        int buttonHeight = 20;
-        int x = (width - buttonWidth) / 2;
-        int y = height / 2 - 42;
+        ConfigOptions.Tab[] tabs = ConfigOptions.Tab.values();
+        int tabsX = (width - tabs.length * TAB_WIDTH - (tabs.length - 1) * TAB_GAP) / 2;
+        for (int i = 0; i < tabs.length; i++) {
+            ConfigOptions.Tab tab = tabs[i];
+            Button button = Button.builder(Component.translatable(tab.translationKey), b -> {
+                        lastTab = tab;
+                        rebuildWidgets();
+                    })
+                    .bounds(tabsX + i * (TAB_WIDTH + TAB_GAP), 28, TAB_WIDTH, BUTTON_HEIGHT)
+                    .build();
+            button.active = tab != lastTab;
+            addRenderableWidget(button);
+        }
 
-        addRenderableWidget(toggleButton(
-                "crowbar.config.nametags",
-                CrowBarState.nameTagsEnabled,
-                x, y,
-                buttonWidth, buttonHeight,
-                button -> {
-                    CrowBarState.nameTagsEnabled = !CrowBarState.nameTagsEnabled;
-                    button.setMessage(toggleText("crowbar.config.nametags", CrowBarState.nameTagsEnabled));
-                }
-        ));
+        CrowBarConfig config = CrowBarConfigStore.config();
+        List<ConfigOptions.Option> options = ConfigOptions.options(lastTab);
+        int left = width / 2 - BUTTON_WIDTH - COLUMN_GAP / 2;
+        int top = 60;
+        for (int i = 0; i < options.size(); i++) {
+            ConfigOptions.Option option = options.get(i);
+            int x = left + (i % 2) * (BUTTON_WIDTH + COLUMN_GAP);
+            int y = top + (i / 2) * ROW_SPACING;
+            Button button = Button.builder(message(option, config), b -> {
+                        option.cycle(config);
+                        CrowBarConfigStore.save();
+                        CrowBarState.syncFeatures();
+                        // One option can unlock another, e.g. Dot colors and Single color.
+                        rebuildWidgets();
+                    })
+                    .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
+                    .tooltip(Tooltip.create(Component.translatable(option.tooltipKey())))
+                    .build();
+            button.active = option.enabled(config);
+            addRenderableWidget(button);
+        }
 
-        addRenderableWidget(toggleButton(
-                "crowbar.config.skins",
-                CrowBarState.skinsEnabled,
-                x, y + 26,
-                buttonWidth, buttonHeight,
-                button -> {
-                    CrowBarState.skinsEnabled = !CrowBarState.skinsEnabled;
-                    button.setMessage(toggleText("crowbar.config.skins", CrowBarState.skinsEnabled));
-                }
-        ));
+        if (lastTab == ConfigOptions.Tab.CONTROLS && minecraft != null) {
+            int y = top + ((options.size() + 1) / 2) * ROW_SPACING;
+            addRenderableWidget(Button.builder(Component.translatable("crowbar.config.keybinds"),
+                            b -> minecraft.setScreen(new KeyBindsScreen(this, minecraft.options)))
+                    .bounds(left, y, BUTTON_WIDTH * 2 + COLUMN_GAP, BUTTON_HEIGHT)
+                    .build());
+        }
 
-        addRenderableWidget(toggleButton(
-                "crowbar.config.view_self",
-                CrowBarState.viewSelfEnabled,
-                x, y + 52,
-                buttonWidth, buttonHeight,
-                button -> {
-                    CrowBarState.viewSelfEnabled = !CrowBarState.viewSelfEnabled;
-                    button.setMessage(toggleText("crowbar.config.view_self", CrowBarState.viewSelfEnabled));
-                }
-        ));
-
-        addRenderableWidget(toggleButton(
-                "crowbar.config.show_distance",
-                CrowBarState.showDistance,
-                x, y + 78,
-                buttonWidth, buttonHeight,
-                button -> {
-                    CrowBarState.showDistance = !CrowBarState.showDistance;
-                    button.setMessage(toggleText("crowbar.config.show_distance", CrowBarState.showDistance));
-                }
-        ));
+        addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, b -> onClose())
+                .bounds(width / 2 - 100, height - 28, 200, BUTTON_HEIGHT)
+                .build());
     }
 
     @Override
@@ -75,18 +96,17 @@ public final class CrowBarConfigScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float deltaTicks) {
         super.extractRenderState(context, mouseX, mouseY, deltaTicks);
-        context.centeredText(font, title, width / 2, height / 2 - 76, 0xFFFFFFFF);
+        context.centeredText(font, title, width / 2, 12, 0xFFFFFFFF);
     }
 
-    private static Button toggleButton(String labelKey, boolean enabled, int x, int y, int width, int height, Button.OnPress action) {
-        return Button.builder(toggleText(labelKey, enabled), action)
-                .bounds(x, y, width, height)
-                .build();
-    }
-
-    private static Component toggleText(String labelKey, boolean enabled) {
-        return Component.translatable(labelKey)
-                .append(Component.literal(": "))
-                .append(Component.translatable(enabled ? "crowbar.config.on" : "crowbar.config.off"));
+    private static Component message(ConfigOptions.Option option, CrowBarConfig config) {
+        ConfigOptions.Value value = option.value(config);
+        MutableComponent valueText = value.translationKey() != null
+                ? Component.translatable(value.translationKey())
+                : Component.literal(value.literal());
+        if (value.color() >= 0) {
+            valueText = valueText.withStyle(style -> style.withColor(value.color()));
+        }
+        return Component.translatable(option.labelKey()).append(Component.literal(": ")).append(valueText);
     }
 }

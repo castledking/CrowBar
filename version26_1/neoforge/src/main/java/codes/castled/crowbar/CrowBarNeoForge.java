@@ -9,6 +9,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
@@ -34,6 +35,7 @@ public final class CrowBarNeoForge {
     private KeyMapping toggleViewSelf;
     private KeyMapping toggleShowDistance;
     private KeyMapping toggleClaimWaypoints;
+    private KeyMapping openConfig;
 
     public CrowBarNeoForge(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::registerPayloads);
@@ -47,12 +49,17 @@ public final class CrowBarNeoForge {
             return;
         }
 
+        CrowBarConfigStore.init(FMLPaths.CONFIGDIR.get());
+        CrowBarNetwork.installColorSender();
+        CrowBarState.syncFeatures();
+
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> onClientTick());
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn event) -> {
             var client = net.minecraft.client.Minecraft.getInstance();
             CrowBarState.alliumPlayerData.clear();
             CrowBarState.clearClaimWaypoints();
             CrowBarState.alliumDataReceived = false;
+            ServerConnection.reset();
             CrowBarState.isIntegratedServer = client.getSingleplayerServer() != null;
             NO_CLAIMS_MESSAGE_LIMITER.reset();
         });
@@ -60,6 +67,7 @@ public final class CrowBarNeoForge {
             CrowBarState.alliumPlayerData.clear();
             CrowBarState.clearClaimWaypoints();
             CrowBarState.alliumDataReceived = false;
+            ServerConnection.reset();
             CrowBarState.isIntegratedServer = false;
             NO_CLAIMS_MESSAGE_LIMITER.reset();
         });
@@ -94,6 +102,8 @@ public final class CrowBarNeoForge {
                     }
                 }
         );
+
+        CrowBarNetwork.register(registrar);
     }
 
     private void registerKeys(RegisterKeyMappingsEvent event) {
@@ -131,12 +141,19 @@ public final class CrowBarNeoForge {
                 GLFW.GLFW_KEY_Z,
                 KEY_CATEGORY
         );
+        openConfig = new KeyMapping(
+                "key.crowbar.open_config",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_BACKSLASH,
+                KEY_CATEGORY
+        );
 
         event.register(toggleNameTags);
         event.register(toggleSkins);
         event.register(toggleViewSelf);
         event.register(toggleShowDistance);
         event.register(toggleClaimWaypoints);
+        event.register(openConfig);
     }
 
     private void onClientTick() {
@@ -145,28 +162,19 @@ public final class CrowBarNeoForge {
         // Deliberately ungated. These toggle display preferences that persist and
         // take effect whenever the bar next appears, so requiring the bar to be live
         // right now would swallow the press — consumeClick drains it either way — and
-        // would disagree with the config screen, which sets the same fields unguarded.
+        // would disagree with the config screen, which changes the same settings unguarded.
         // On a plain multiplayer server the old condition was only true while another
         // player was in waypoint range, so the keys silently did nothing when alone.
-        while (toggleNameTags.consumeClick()) {
+        tickFeatureKey(client, toggleNameTags, CrowBarFeature.NAME_TAGS);
+        tickFeatureKey(client, toggleSkins, CrowBarFeature.SKINS);
+        tickFeatureKey(client, toggleViewSelf, CrowBarFeature.VIEW_SELF);
+        tickFeatureKey(client, toggleShowDistance, CrowBarFeature.SHOW_DISTANCE);
+        CrowBarState.syncFeatures();
+        while (openConfig.consumeClick()) {
             if (shouldSkipKeybind()) continue;
-            CrowBarState.nameTagsEnabled = !CrowBarState.nameTagsEnabled;
-            showToggle(client, "Name tags", CrowBarState.nameTagsEnabled);
-        }
-        while (toggleSkins.consumeClick()) {
-            if (shouldSkipKeybind()) continue;
-            CrowBarState.skinsEnabled = !CrowBarState.skinsEnabled;
-            showToggle(client, "Skins", CrowBarState.skinsEnabled);
-        }
-        while (toggleViewSelf.consumeClick()) {
-            if (shouldSkipKeybind()) continue;
-            CrowBarState.viewSelfEnabled = !CrowBarState.viewSelfEnabled;
-            showToggle(client, "View self", CrowBarState.viewSelfEnabled);
-        }
-        while (toggleShowDistance.consumeClick()) {
-            if (shouldSkipKeybind()) continue;
-            CrowBarState.showDistance = !CrowBarState.showDistance;
-            showToggle(client, "Show distance", CrowBarState.showDistance);
+            if (client.screen == null) {
+                client.setScreen(new CrowBarConfigScreen(null));
+            }
         }
         while (toggleClaimWaypoints.consumeClick()) {
             if (shouldSkipKeybind()) continue;
@@ -189,6 +197,19 @@ public final class CrowBarNeoForge {
                 case OWNED -> "owned";
                 case TRUSTED -> "owned + trusted";
             });
+        }
+    }
+
+    /** Feeds one feature key into {@link FeatureKeys}, honouring its toggle or hold mode. */
+    private static void tickFeatureKey(net.minecraft.client.Minecraft client, KeyMapping key, CrowBarFeature feature) {
+        boolean skip = shouldSkipKeybind();
+        int presses = 0;
+        while (key.consumeClick()) {
+            if (!skip) presses++;
+        }
+        if (FeatureKeys.tick(CrowBarConfigStore.config(), feature, presses, key.isDown() && !skip,
+                message -> showMessage(client, message))) {
+            CrowBarConfigStore.save();
         }
     }
 
@@ -226,12 +247,6 @@ public final class CrowBarNeoForge {
     private static void showNoClaimsFound(net.minecraft.client.Minecraft client) {
         if (client.player != null && NO_CLAIMS_MESSAGE_LIMITER.tryAcquire(System.currentTimeMillis())) {
             client.gui.setOverlayMessage(Component.literal("No claims found").withStyle(ChatFormatting.RED), false);
-        }
-    }
-
-    private static void showToggle(net.minecraft.client.Minecraft client, String label, boolean enabled) {
-        if (client.player != null) {
-            client.gui.setOverlayMessage(Component.literal(label + ": " + (enabled ? "on" : "off")), false);
         }
     }
 }

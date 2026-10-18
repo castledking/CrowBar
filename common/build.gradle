@@ -7,13 +7,24 @@ version = rootProject.mod_version
 
 dependencies {
     compileOnly "com.mojang:authlib:7.0.63"
+    // Both ship with every supported Minecraft client, so they are compile-only here and
+    // never bundled. 2.10.1 is what Minecraft 1.21 ships; later clients carry newer, compatible
+    // releases.
+    compileOnly "com.google.code.gson:gson:2.10.1"
+    compileOnly "org.slf4j:slf4j-api:2.0.9"
     testImplementation platform("org.junit:junit-bom:5.12.2")
     testImplementation "org.junit.jupiter:junit-jupiter"
+    testImplementation "com.google.code.gson:gson:2.10.1"
+    testImplementation "org.slf4j:slf4j-api:2.0.9"
+    testRuntimeOnly "org.slf4j:slf4j-nop:2.0.9"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 tasks.named("test") {
     useJUnitPlatform()
+    // LanguageFilesTest checks every loader's lang file against the options defined here.
+    systemProperty "crowbar.rootDir", rootProject.projectDir.absolutePath
+    inputs.files(fileTree(rootProject.projectDir) { include "version*/*/src/main/resources/assets/crowbar/lang/*.json" })
 }
 
 java {

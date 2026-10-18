@@ -1,0 +1,41 @@
+name: CrowBar
+version: "${version}"
+main: codes.castled.crowbar.bukkit.CrowBarPlugin
+api-version: "1.21"
+folia-supported: true
+description: Sends CrowBar clients player positions and GriefPrevention claim waypoints.
+author: castledking
+website: https://castled.codes
+softdepend: [GriefPrevention, GPExpansion, Allium]
+commands:
+  crowbar:
+    description: CrowBar server settings, your dot color, your claim markers, and fake players for testing.
+    usage: /<command> <color|claims|fake|reload>
+permissions:
+  crowbar.locator:
+    description: Receive other players' positions on the CrowBar locator bar.
+    default: true
+  crowbar.locator.hidden:
+    description: Never appear on anyone's CrowBar locator bar.
+    default: false
+  crowbar.locator.see-hidden:
+    description: See players who are sneaking, invisible, wearing a hiding head item, or spectating. The equivalent of Allium's allium.crowbar.
+    default: op
+  crowbar.color:
+    description: Choose your own dot color with /crowbar color or CrowBar's settings screen, when colors.mode is custom.
+    default: true
+  crowbar.color.others:
+    description: Set or reset another player's dot color.
+    default: op
+  crowbar.claims:
+    description: Choose which claims show as markers on your vanilla locator bar.
+    default: true
+  crowbar.claims.admin:
+    description: See admin claims as markers when claim-waypoints.admin-claims is on.
+    default: op
+  crowbar.fake:
+    description: Add fake players that only you see on your CrowBar locator bar, for screenshots and testing.
+    default: op
+  crowbar.reload:
+    description: Reload the CrowBar config.
+    default: op

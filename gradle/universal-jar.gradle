@@ -1,0 +1,15 @@
+// Bundles the CrowBar server plugin into this loader's jar, making it a universal jar: a Fabric or
+// NeoForge client mod and, through plugin.yml, a Bukkit, Paper or Folia plugin. Each platform reads
+// only its own metadata (fabric.mod.json, META-INF/neoforge.mods.toml, plugin.yml) and never loads
+// the other side's classes. Applied by every loader subproject.
+evaluationDependsOn(":bukkit")
+def bukkitProject = project(":bukkit")
+
+tasks.named("jar", Jar) {
+    from(bukkitProject.sourceSets.main.output)
+    manifest {
+        // The plugin only uses the Bukkit API and Mojang-named reflection. This keeps Paper from
+        // remapping the jar, which would also mean reading client classes it cannot use.
+        attributes "paperweight-mappings-namespace": "mojang"
+    }
+}

@@ -26,14 +26,16 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Builds every Fabric and NeoForge jar and runs the common module tests, which also check
+      # that every jar's language file matches.
       - name: Build
-        run: ./gradlew :version21:build :version26_1:build :version26_2:build --no-daemon
+        run: ./gradlew build --no-daemon
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: crowbar-artifacts
           path: |
-            version21/build/libs/*.jar
-            version26_1/build/libs/*.jar
-            version26_2/build/libs/*.jar
+            version*/*/build/libs/CrowBar-*.jar
+            bukkit/build/libs/CrowBar-plugin-*.jar
+            !version*/*/build/libs/*-sources.jar

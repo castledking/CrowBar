@@ -1,6 +1,7 @@
 package codes.castled.crowbar;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -26,9 +27,13 @@ public final class CrowBarClient implements ClientModInitializer {
     private KeyBinding toggleViewSelf;
     private KeyBinding toggleShowDistance;
     private KeyBinding toggleClaimWaypoints;
+    private KeyBinding openConfig;
 
     @Override
     public void onInitializeClient() {
+        CrowBarConfigStore.init(FabricLoader.getInstance().getConfigDir());
+        CrowBarState.syncFeatures();
+
         // Register custom payload type so the client can decode Bukkit plugin messages
         PayloadTypeRegistry.playS2C().register(
                 AlliumPacketHandler.PlayerDataPayload.ID,
@@ -65,6 +70,8 @@ public final class CrowBarClient implements ClientModInitializer {
                 }
         );
 
+        CrowBarNetwork.register();
+
         toggleNameTags = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.crowbar.toggle_nametags",
                 InputUtil.Type.KEYSYM,
@@ -97,33 +104,30 @@ public final class CrowBarClient implements ClientModInitializer {
                 InputUtil.GLFW_KEY_Z,
                 KEY_CATEGORY
         ));
+        openConfig = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.crowbar.open_config",
+                InputUtil.Type.KEYSYM,
+                InputUtil.GLFW_KEY_BACKSLASH,
+                KEY_CATEGORY
+        ));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             // Deliberately ungated. These toggle display preferences that persist and
             // take effect whenever the bar next appears, so requiring the bar to be live
             // right now would swallow the press — consumeClick drains it either way — and
-            // would disagree with the config screen, which sets the same fields unguarded.
+            // would disagree with the config screen, which changes the same settings unguarded.
             // On a plain multiplayer server the old condition was only true while another
             // player was in waypoint range, so the keys silently did nothing when alone.
-            while (toggleNameTags.wasPressed()) {
-                if (shouldSkipKeybind(toggleNameTags)) continue;
-                CrowBarState.nameTagsEnabled = !CrowBarState.nameTagsEnabled;
-                showToggle(client, "Name tags", CrowBarState.nameTagsEnabled);
-            }
-            while (toggleSkins.wasPressed()) {
-                if (shouldSkipKeybind(toggleSkins)) continue;
-                CrowBarState.skinsEnabled = !CrowBarState.skinsEnabled;
-                showToggle(client, "Skins", CrowBarState.skinsEnabled);
-            }
-            while (toggleViewSelf.wasPressed()) {
-                if (shouldSkipKeybind(toggleViewSelf)) continue;
-                CrowBarState.viewSelfEnabled = !CrowBarState.viewSelfEnabled;
-                showToggle(client, "View self", CrowBarState.viewSelfEnabled);
-            }
-            while (toggleShowDistance.wasPressed()) {
-                if (shouldSkipKeybind(toggleShowDistance)) continue;
-                CrowBarState.showDistance = !CrowBarState.showDistance;
-                showToggle(client, "Show distance", CrowBarState.showDistance);
+            tickFeatureKey(client, toggleNameTags, CrowBarFeature.NAME_TAGS);
+            tickFeatureKey(client, toggleSkins, CrowBarFeature.SKINS);
+            tickFeatureKey(client, toggleViewSelf, CrowBarFeature.VIEW_SELF);
+            tickFeatureKey(client, toggleShowDistance, CrowBarFeature.SHOW_DISTANCE);
+            CrowBarState.syncFeatures();
+            while (openConfig.wasPressed()) {
+                if (shouldSkipKeybind(openConfig)) continue;
+                if (client.currentScreen == null) {
+                    client.setScreen(new CrowBarConfigScreen(null));
+                }
             }
             while (toggleClaimWaypoints.wasPressed()) {
                 if (shouldSkipKeybind(toggleClaimWaypoints)) continue;
@@ -155,6 +159,7 @@ public final class CrowBarClient implements ClientModInitializer {
                 CrowBarState.alliumPlayerData.clear();
                 CrowBarState.clearClaimWaypoints();
                 CrowBarState.alliumDataReceived = false;
+                ServerConnection.reset();
                 CrowBarState.isIntegratedServer = client.getServer() != null;
                 NO_CLAIMS_MESSAGE_LIMITER.reset();
         });
@@ -162,12 +167,26 @@ public final class CrowBarClient implements ClientModInitializer {
                 CrowBarState.alliumPlayerData.clear();
                 CrowBarState.clearClaimWaypoints();
                 CrowBarState.alliumDataReceived = false;
+                ServerConnection.reset();
                 CrowBarState.isIntegratedServer = false;
                 NO_CLAIMS_MESSAGE_LIMITER.reset();
         });
 
         // Note: Allium-restored player rendering is now injected via InGameHudMixin
         // before renderExperienceBar, so it renders behind the XP number.
+    }
+
+    /** Feeds one feature key into {@link FeatureKeys}, honouring its toggle or hold mode. */
+    private static void tickFeatureKey(MinecraftClient client, KeyBinding key, CrowBarFeature feature) {
+        boolean skip = shouldSkipKeybind(key);
+        int presses = 0;
+        while (key.wasPressed()) {
+            if (!skip) presses++;
+        }
+        if (FeatureKeys.tick(CrowBarConfigStore.config(), feature, presses, key.isPressed() && !skip,
+                message -> showMessage(client, message))) {
+            CrowBarConfigStore.save();
+        }
     }
 
     private static boolean hasModifiersPressed() {
@@ -212,12 +231,6 @@ public final class CrowBarClient implements ClientModInitializer {
     private static void showNoClaimsFound(MinecraftClient client) {
         if (client.player != null && NO_CLAIMS_MESSAGE_LIMITER.tryAcquire(System.currentTimeMillis())) {
             client.player.sendMessage(Text.literal("No claims found").formatted(Formatting.RED), true);
-        }
-    }
-
-    private static void showToggle(net.minecraft.client.MinecraftClient client, String label, boolean enabled) {
-        if (client.player != null) {
-            client.player.sendMessage(Text.literal(label + ": " + (enabled ? "on" : "off")), true);
         }
     }
 }

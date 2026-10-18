@@ -69,4 +69,17 @@ public final class LocatorBarVisibility {
     public static boolean shouldRenderPlayerSkins(boolean playerModeActive, boolean skinsEnabled) {
         return playerModeActive && skinsEnabled;
     }
+
+    /**
+     * Whether a player stays off the bar when CrowBar reads players itself, before Minecraft 1.21.6.
+     *
+     * <p>Mirrors the vanilla locator bar from 1.21.6 on, where sneaking, invisibility, and wearing a
+     * carved pumpkin or mob head all drop a player's waypoint range to zero. Keeping the same rules
+     * means the older versions reveal nothing a newer client would not.
+     *
+     * @param disguised wearing a carved pumpkin or any mob or player head
+     */
+    public static boolean isHiddenFromLocator(boolean spectator, boolean sneaking, boolean invisible, boolean disguised) {
+        return spectator || sneaking || invisible || disguised;
+    }
 }

@@ -1,0 +1,64 @@
+plugins {
+    id "java"
+}
+
+group = rootProject.maven_group
+version = rootProject.mod_version
+
+base {
+    archivesName = "CrowBar-plugin"
+}
+
+repositories {
+    maven { url = "https://repo.papermc.io/repository/maven-public/" }
+    maven {
+        url = "https://jitpack.io"
+        content { includeGroup "com.github.castledking" }
+    }
+    mavenCentral()
+}
+
+dependencies {
+    // Built against the oldest Paper API it supports and only calls APIs that exist from there
+    // to 26.x, so the one plugin build runs on every server the CrowBar jars target.
+    compileOnly "io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT"
+    // Optional: claim waypoints run only when GriefPrevention (or GriefPrevention3D) is installed.
+    compileOnly("com.github.castledking:GriefPrevention3D:18.2.7") {
+        transitive = false
+    }
+
+    testImplementation "io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT"
+    testImplementation project(":common")
+    testImplementation platform("org.junit:junit-bom:5.12.2")
+    testImplementation "org.junit.jupiter:junit-jupiter"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("plugin.yml") {
+        expand "version": project.version
+    }
+}
+
+tasks.named("test") {
+    useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+}
+
+// The plugin on its own, for servers that only want the server side.
+tasks.named("jar", Jar) {
+    manifest {
+        // The plugin only uses the Bukkit API and Mojang-named reflection, so Paper must not try
+        // to remap it, least of all the client classes the universal jars carry alongside it.
+        attributes "paperweight-mappings-namespace": "mojang"
+    }
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}

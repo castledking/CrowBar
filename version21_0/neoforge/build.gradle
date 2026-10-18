@@ -1,0 +1,69 @@
+plugins {
+    id "net.neoforged.moddev"
+}
+
+group = rootProject.maven_group
+version = rootProject.mod_version
+
+base {
+    archivesName = project.archives_base_name
+}
+
+neoForge {
+    version = project.neoforge_version
+
+    runs {
+        client {
+            client()
+            gameDirectory = file("run")
+        }
+    }
+
+    mods {
+        crowbar {
+            sourceSet sourceSets.main
+            // The jar bundles common's classes; dev runs need them in the same mod too.
+            sourceSet project(":common").sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    implementation project(":common")
+}
+
+// Bundle the loader-agnostic common classes directly into the mod jar.
+tasks.named("jar", Jar) {
+    manifest {
+        attributes "Implementation-Version": project.version
+    }
+    from project(":common").sourceSets.main.output
+}
+
+processResources {
+    inputs.property "version", project.version
+    inputs.property "neoforge_dependency", project.neoforge_dependency
+    inputs.property "minecraft_dependency", project.minecraft_dependency
+
+    Map<String, String> expansions = [
+            "mod_version"         : project.version.toString(),
+            "neoforge_dependency": project.neoforge_dependency,
+            "minecraft_dependency": project.minecraft_dependency
+    ]
+
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand expansions
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+apply from: rootProject.file("gradle/universal-jar.gradle")

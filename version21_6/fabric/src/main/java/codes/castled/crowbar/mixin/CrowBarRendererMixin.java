@@ -1,32 +1,32 @@
 package codes.castled.crowbar.mixin;
 
+import codes.castled.crowbar.CrowBarConfigStore;
+import codes.castled.crowbar.CrowBarHudRenderer;
 import codes.castled.crowbar.CrowBarState;
+import codes.castled.crowbar.MarkerFade;
 import com.mojang.datafixers.util.Either;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.PlayerSkinDrawer;
 import net.minecraft.client.gui.hud.bar.LocatorBar;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.entity.Entity;
-import net.minecraft.client.util.SkinTextures;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.math.ColorHelper;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
 import net.minecraft.world.waypoint.TrackedWaypoint;
+import net.minecraft.world.waypoint.Waypoint;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -35,7 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public abstract class CrowBarRendererMixin {
     @Unique
     private static final ConcurrentHashMap<UUID, String> CROWBAR$UUID_NAME_CACHE = new ConcurrentHashMap<>();
-    
+
     // Fallback constants for waypoint style scaling (when WaypointStyle API is unavailable)
     @Unique
     private static final float CROWBAR_FALLBACK_NEAR_DISTANCE = 128.0F;
@@ -77,6 +77,12 @@ public abstract class CrowBarRendererMixin {
         return name;
     }
 
+    /**
+     * Overlays faces and labels on the dots vanilla just drew.
+     *
+     * <p>Labels go into {@link CrowBarHudRenderer}'s queue rather than straight to the screen, so they
+     * share overlap culling, focus and styling with CrowBar's own markers.
+     */
     @Inject(method = "renderAddons", at = @At("TAIL"))
     private void crowbar$renderLocatorAddons(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
         if (CrowBarState.isExternalRenderSuppressed()) {
@@ -103,12 +109,9 @@ public abstract class CrowBarRendererMixin {
                 return camera.getYaw();
             }
         };
-        TextRenderer textRenderer = client.textRenderer;
         int screenWidth = context.getScaledWindowWidth();
         int screenHeight = context.getScaledWindowHeight();
-        int centerX = screenWidth / 2;
         int locatorBarY = ((LocatorBar) (Object) this).getCenterY(client.getWindow());
-        List<WaypointRenderData> waypoints = new ArrayList<>();
 
         client.player.networkHandler.getWaypointHandler().forEachWaypoint(cameraEntity, waypoint -> {
             if (crowbar$isSelfWaypoint(waypoint, cameraEntity)) {
@@ -123,34 +126,39 @@ public abstract class CrowBarRendererMixin {
             int baseX = MathHelper.ceil((screenWidth - 9.0F) / 2.0F);
             int markerX = baseX + MathHelper.floor(yaw * 173.0D / 2.0D / 60.0D);
             int markerY = locatorBarY - 2;
-            String ownerName = "Unknown";
+            if (markerX < 0 || markerX >= screenWidth || markerY < 0 || markerY >= screenHeight) {
+                return;
+            }
 
             Either<UUID, String> source = waypoint.getSource();
-            if (source != null) {
-                ownerName = source.map(this::crowbar$getName, name -> name);
-            }
-
-            boolean valid = markerX >= 0 && markerX < screenWidth && markerY >= 0 && markerY < screenHeight;
             UUID ownerUuid = source == null ? null : source.left().orElse(null);
-            double distance = crowbar$getDistanceFromWaypoint(waypoint, cameraEntity, world);
-            waypoints.add(new WaypointRenderData(markerX, markerY, ownerName, ownerUuid, valid, distance));
-        });
-
-        WaypointRenderData closest = waypoints.stream()
-                .filter(WaypointRenderData::valid)
-                .min(Comparator.comparingInt(data -> Math.abs(data.x() - centerX)))
-                .orElse(null);
-
-        for (WaypointRenderData data : waypoints) {
-            if (!data.valid() || data == closest) {
-                continue;
+            // Claim markers are drawn from claim data instead, which carries the name.
+            if (CrowBarState.isClaimMarker(ownerUuid)) {
+                return;
             }
-            crowbar$drawWaypoint(context, textRenderer, data, 0x70FFFFFF);
-        }
+            // Only players have a tab list entry. Other UUID waypoints are marker entities or
+            // datapack waypoints with no face or name, so they keep vanilla's dot and no label
+            // rather than a raw UUID.
+            boolean isPlayer = ownerUuid != null && client.player.networkHandler.getPlayerListEntry(ownerUuid) != null;
+            String ownerName = source == null ? null : source.map(uuid -> isPlayer ? this.crowbar$getName(uuid) : null, name -> name);
+            double distance = crowbar$getDistanceFromWaypoint(waypoint, cameraEntity, world);
+            int size = crowbar$calculateSizeFromDistance((float) distance, 9) / 100;
+            int centerX = markerX + 4;
+            int centerY = markerY + 4;
 
-        if (closest != null && closest.valid()) {
-            crowbar$drawWaypoint(context, textRenderer, closest, 0xFFFFFFFF);
-        }
+            if (isPlayer) {
+                Waypoint.Config config = waypoint.getConfig();
+                int vanillaColor = config.color.orElseGet(
+                        () -> ColorHelper.withBrightness(ColorHelper.withAlpha(255, ownerUuid.hashCode()), 0.9F));
+                float spriteDistance = MathHelper.sqrt((float) waypoint.squaredDistanceTo(cameraEntity));
+                Identifier vanillaSprite = client.getWaypointStyleAssetManager().get(config.style).getSpriteForDistance(spriteDistance);
+                CrowBarHudRenderer.renderVanillaPlayerOverlay(context, ownerUuid, centerX, centerY, size, distance, vanillaColor, vanillaSprite);
+            }
+
+            String label = CrowBarHudRenderer.labelText(CrowBarState.nameTagsEnabled ? ownerName : null, distance);
+            CrowBarHudRenderer.queueLabel(label, centerX, centerY - size / 2 - 12,
+                    MarkerFade.alpha(CrowBarConfigStore.effective(), distance));
+        });
     }
 
     @Unique
@@ -161,6 +169,7 @@ public abstract class CrowBarRendererMixin {
                 .orElse(false);
     }
 
+    /** Blocks to the waypoint's owner, or {@code -1} when no position source knows where they are. */
     @Unique
     private double crowbar$getDistanceFromWaypoint(TrackedWaypoint waypoint, Entity cameraEntity, World world) {
         try {
@@ -168,7 +177,7 @@ public abstract class CrowBarRendererMixin {
             Either<UUID, String> source = waypoint.getSource();
             if (source != null && source.left().isPresent()) {
                 UUID uuid = source.left().get();
-                
+
                 // Use unified position lookup (Allium data, IntegratedServer, or entity fallback)
                 var playerPos = CrowBarState.getPlayerPos(uuid);
                 if (playerPos.isPresent()) {
@@ -176,13 +185,12 @@ public abstract class CrowBarRendererMixin {
                     double deltaX = pos.x - cameraEntity.getX();
                     double deltaY = pos.y - cameraEntity.getY();
                     double deltaZ = pos.z - cameraEntity.getZ();
-                    double distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
-                    return distance;
+                    return Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
                 }
             }
-            return 0;
+            return -1;
         } catch (Exception e) {
-            return 0;
+            return -1;
         }
     }
 
@@ -193,7 +201,7 @@ public abstract class CrowBarRendererMixin {
         // Returns size in hundredths (multiply by 0.01f to get pixels)
         // Note: WaypointStyle API not available in 1.21.11, using fallback constants
         if (distance <= 0) return baseSize * 100;
-        
+
         float progress = 1.0F - MathHelper.clamp(
                 (distance - CROWBAR_FALLBACK_NEAR_DISTANCE) /
                 (CROWBAR_FALLBACK_FAR_DISTANCE - CROWBAR_FALLBACK_NEAR_DISTANCE),
@@ -206,77 +214,5 @@ public abstract class CrowBarRendererMixin {
                 CROWBAR_MIN_DOT_SIZE_HUNDREDTHS,
                 baseSize * 100
         );
-    }
-
-    @Unique
-    private void crowbar$drawWaypoint(DrawContext context, TextRenderer textRenderer, WaypointRenderData data, int color) {
-        // Render skin for vanilla-visible waypoints when skins are enabled
-        if (CrowBarState.skinsEnabled && data.ownerUuid() != null) {
-            int sizeHundredths = crowbar$calculateSizeFromDistance((float) data.distance(), 9);
-            int size = sizeHundredths / 100;
-            int centerX = data.x() + 4;
-            int centerY = data.y() + 4;
-            
-            // Draw skin if available
-            SkinTextures skin = crowbar$getSkin(data.ownerUuid());
-            if (skin != null) {
-                PlayerSkinDrawer.draw(context, skin, centerX - size / 2, centerY - size / 2, size);
-            }
-        }
-        
-        // Handle nametags/distance
-        if (CrowBarState.nameTagsEnabled) {
-            int textWidth = textRenderer.getWidth(data.ownerName());
-            int textX = data.x() - textWidth / 2;
-            int textY = data.y() - 10;
-            context.drawTextWithShadow(textRenderer, data.ownerName(), textX, textY, color);
-
-            if (CrowBarState.showDistance) {
-                if (data.distance() > 0) {
-                    String distanceText = String.format("%.0fm", data.distance());
-                    int distanceX = textX + textWidth + 4;
-                    int distanceY = textY;
-                    context.drawTextWithShadow(textRenderer, distanceText, distanceX, distanceY, color);
-                } else {
-                    String distanceText = "?m";
-                    int distanceX = textX + textWidth + 4;
-                    int distanceY = textY;
-                    context.drawTextWithShadow(textRenderer, distanceText, distanceX, distanceY, color);
-                }
-            }
-        } else if (CrowBarState.showDistance) {
-            if (data.distance() > 0) {
-                String distanceText = String.format("%.0fm", data.distance());
-                int distanceWidth = textRenderer.getWidth(distanceText);
-                int distanceX = data.x() - distanceWidth / 2;
-                int distanceY = data.y() - 10;
-                context.drawTextWithShadow(textRenderer, distanceText, distanceX, distanceY, color);
-            } else {
-                String distanceText = "?m";
-                int distanceWidth = textRenderer.getWidth(distanceText);
-                int distanceX = data.x() - distanceWidth / 2;
-                int distanceY = data.y() - 10;
-                context.drawTextWithShadow(textRenderer, distanceText, distanceX, distanceY, color);
-            }
-        }
-    }
-
-    @Unique
-    private record WaypointRenderData(int x, int y, String ownerName, UUID ownerUuid, boolean valid, double distance) {
-    }
-
-    @Unique
-    private SkinTextures crowbar$getSkin(UUID uuid) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        ClientPlayNetworkHandler networkHandler = client.getNetworkHandler();
-        if (networkHandler == null) return null;
-        PlayerListEntry entry = networkHandler.getPlayerListEntry(uuid);
-        if (entry != null) {
-            return entry.getSkinTextures();
-        }
-        if (client.player != null && client.player.getUuid().equals(uuid)) {
-            return client.player.getSkinTextures();
-        }
-        return null;
     }
 }

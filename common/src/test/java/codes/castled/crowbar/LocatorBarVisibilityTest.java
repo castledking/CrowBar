@@ -89,4 +89,13 @@ class LocatorBarVisibilityTest {
         assertFalse(LocatorBarVisibility.shouldRenderPlayerSkins(true, false));
         assertFalse(LocatorBarVisibility.shouldRenderPlayerSkins(false, true));
     }
+
+    @Test
+    void playersHideFromTheBarLikeVanillaWaypoints() {
+        assertFalse(LocatorBarVisibility.isHiddenFromLocator(false, false, false, false));
+        assertTrue(LocatorBarVisibility.isHiddenFromLocator(true, false, false, false));
+        assertTrue(LocatorBarVisibility.isHiddenFromLocator(false, true, false, false));
+        assertTrue(LocatorBarVisibility.isHiddenFromLocator(false, false, true, false));
+        assertTrue(LocatorBarVisibility.isHiddenFromLocator(false, false, false, true));
+    }
 }

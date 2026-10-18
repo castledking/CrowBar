@@ -60,3 +60,5 @@ java {
     sourceCompatibility = JavaVersion.toVersion(25)
     targetCompatibility = JavaVersion.toVersion(25)
 }
+
+apply from: rootProject.file("gradle/universal-jar.gradle")
