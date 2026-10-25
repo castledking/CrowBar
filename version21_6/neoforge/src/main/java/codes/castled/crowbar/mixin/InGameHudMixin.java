@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * NeoForge splits the status bars into one GUI layer per element, so each one hides for the self
@@ -171,6 +172,20 @@ public abstract class InGameHudMixin {
         } else {
             CrowBarHudRenderer.renderLocatorBarMarkers(context, tickCounter);
             CrowBarHudRenderer.drawQueuedLabels(context);
+        }
+    }
+
+    /**
+     * Shows the experience bar (or the mount's jump bar) instead of a blank locator bar; see
+     * {@link CrowBarHudRenderer#shouldSkipLocatorBar}. Vanilla's bar type enum is not public, so
+     * it is matched and replaced by constant name.
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    @Inject(method = "nextContextualInfoState", at = @At("RETURN"), cancellable = true)
+    private void crowbar$skipBlankLocatorBar(CallbackInfoReturnable cir) {
+        Enum<?> bar = (Enum<?>) cir.getReturnValue();
+        if (bar != null && "LOCATOR".equals(bar.name()) && CrowBarHudRenderer.shouldSkipLocatorBar()) {
+            cir.setReturnValue(Enum.valueOf((Class) bar.getDeclaringClass(), CrowBarHudRenderer.locatorBarFallback()));
         }
     }
 }

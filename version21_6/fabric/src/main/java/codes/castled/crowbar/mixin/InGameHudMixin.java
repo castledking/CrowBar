@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(InGameHud.class)
 public abstract class InGameHudMixin {
@@ -122,5 +123,19 @@ public abstract class InGameHudMixin {
     private void crowbar$renderLocatorMarkers(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
         CrowBarHudRenderer.renderLocatorBarMarkers(context, tickCounter);
         CrowBarHudRenderer.drawQueuedLabels(context);
+    }
+
+    /**
+     * Shows the experience bar (or the mount's jump bar) instead of a blank locator bar; see
+     * {@link CrowBarHudRenderer#shouldSkipLocatorBar}. Vanilla's bar type enum is not public, so
+     * it is matched and replaced by constant name.
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    @Inject(method = "getCurrentBarType", at = @At("RETURN"), cancellable = true)
+    private void crowbar$skipBlankLocatorBar(CallbackInfoReturnable cir) {
+        Enum<?> bar = (Enum<?>) cir.getReturnValue();
+        if (bar != null && "LOCATOR".equals(bar.name()) && CrowBarHudRenderer.shouldSkipLocatorBar()) {
+            cir.setReturnValue(Enum.valueOf((Class) bar.getDeclaringClass(), CrowBarHudRenderer.locatorBarFallback()));
+        }
     }
 }

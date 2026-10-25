@@ -16,6 +16,8 @@ import java.util.UUID;
  *   "vanished":false,"teamColor":16777215,"bearingOnly":false,"name":"Steve"}]}</pre>
  *
  * {@code teamColor}, {@code bearingOnly} and {@code name} are optional; older senders leave them out.
+ * A root-level {@code fakePlayers: true} marks an independent snapshot of private screenshot
+ * markers. These replace only previous fake markers; normal snapshots replace only real players.
  */
 public final class PlayerDataJson {
     public static final String CHANNEL = "crowbar:player_data";
@@ -28,18 +30,39 @@ public final class PlayerDataJson {
      *         JSON object at all. Malformed entries are skipped rather than failing the whole payload.
      */
     public static Map<UUID, AlliumPlayerData> parse(String json) {
+        Snapshot snapshot = parseSnapshot(json);
+        return snapshot == null ? null : snapshot.players();
+    }
+
+    /** Applies an independently replaceable real-player or private fake-player snapshot. */
+    public static boolean applySnapshot(String json, Map<UUID, AlliumPlayerData> players) {
+        Snapshot snapshot = parseSnapshot(json);
+        if (snapshot == null) return false;
+        players.values().removeIf(player -> player.fake == snapshot.fake());
+        players.putAll(snapshot.players());
+        return true;
+    }
+
+    private record Snapshot(Map<UUID, AlliumPlayerData> players, boolean fake) {
+    }
+
+    private static Snapshot parseSnapshot(String json) {
         JsonObject root;
+        boolean fake;
         try {
             JsonElement parsed = JsonParser.parseString(json);
             if (!parsed.isJsonObject()) return null;
             root = parsed.getAsJsonObject();
+            JsonElement fakeFlag = root.get("fakePlayers");
+            if (fakeFlag != null && (!fakeFlag.isJsonPrimitive() || !fakeFlag.getAsJsonPrimitive().isBoolean())) return null;
+            fake = fakeFlag != null && fakeFlag.getAsBoolean();
         } catch (RuntimeException e) {
             return null;
         }
 
         Map<UUID, AlliumPlayerData> players = new HashMap<>();
         JsonElement list = root.get("players");
-        if (list == null || !list.isJsonArray()) return players;
+        if (list == null || !list.isJsonArray()) return new Snapshot(players, fake);
         JsonArray array = list.getAsJsonArray();
         for (JsonElement element : array) {
             try {
@@ -57,11 +80,11 @@ public final class PlayerDataJson {
                         player.get("wearingPumpkin").getAsBoolean(),
                         player.get("sneaking").getAsBoolean(),
                         player.get("vanished").getAsBoolean(),
-                        teamColor, bearingOnly, name == null || name.isBlank() ? null : name, true));
+                        teamColor, bearingOnly, name == null || name.isBlank() ? null : name, true, fake));
             } catch (RuntimeException ignored) {
                 // A missing field, wrong type or bad UUID drops just this entry.
             }
         }
-        return players;
+        return new Snapshot(players, fake);
     }
 }

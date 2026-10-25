@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -57,5 +58,59 @@ class PlayerDataJsonTest {
         assertNull(PlayerDataJson.parse("[]"));
         assertNull(PlayerDataJson.parse("{oops"));
         assertTrue(PlayerDataJson.parse("{}").isEmpty());
+    }
+
+    @Test
+    void alternatingAlliumAndFakeSnapshotsKeepBothKindsOfPlayer() {
+        Map<UUID, AlliumPlayerData> players = new ConcurrentHashMap<>();
+        assertTrue(PlayerDataJson.applySnapshot(snapshot(STEVE, false), players));
+        assertTrue(PlayerDataJson.applySnapshot(snapshot(ALEX, true), players));
+        assertEquals(2, players.size(), "Fake markers must not replace Allium players");
+
+        for (int tick = 0; tick < 20; tick++) {
+            assertTrue(PlayerDataJson.applySnapshot(snapshot(STEVE, false), players));
+            assertTrue(players.containsKey(ALEX), "Allium updates must not erase fake markers");
+            assertTrue(PlayerDataJson.applySnapshot(snapshot(ALEX, true), players));
+            assertTrue(players.containsKey(STEVE));
+        }
+        assertTrue(players.get(ALEX).fake);
+        assertFalse(players.get(STEVE).fake);
+    }
+
+    @Test
+    void clearingFakeMarkersLeavesAlliumsPlayersAlone() {
+        Map<UUID, AlliumPlayerData> players = new ConcurrentHashMap<>();
+        PlayerDataJson.applySnapshot(snapshot(ALEX, true), players);
+        PlayerDataJson.applySnapshot(snapshot(STEVE, false), players);
+
+        assertTrue(PlayerDataJson.applySnapshot("{\"fakePlayers\":true,\"players\":[]}", players));
+        assertEquals(java.util.Set.of(STEVE), players.keySet());
+    }
+
+    @Test
+    void removingRealPlayersLeavesFakeMarkersAlone() {
+        Map<UUID, AlliumPlayerData> players = new ConcurrentHashMap<>();
+        PlayerDataJson.applySnapshot(snapshot(STEVE, false), players);
+        PlayerDataJson.applySnapshot(snapshot(ALEX, true), players);
+
+        assertTrue(PlayerDataJson.applySnapshot("{\"players\":[]}", players));
+        assertEquals(java.util.Set.of(ALEX), players.keySet());
+    }
+
+    @Test
+    void malformedSnapshotDoesNotEraseEitherKindOfPlayer() {
+        Map<UUID, AlliumPlayerData> players = new ConcurrentHashMap<>();
+        PlayerDataJson.applySnapshot(snapshot(STEVE, false), players);
+        PlayerDataJson.applySnapshot(snapshot(ALEX, true), players);
+        var before = Map.copyOf(players);
+
+        assertFalse(PlayerDataJson.applySnapshot("{oops", players));
+        assertFalse(PlayerDataJson.applySnapshot("{\"fakePlayers\":\"yes\",\"players\":[]}", players));
+        assertEquals(before, players);
+    }
+
+    private static String snapshot(UUID id, boolean fake) {
+        return "{\"fakePlayers\":" + fake + ",\"players\":[{\"uuid\":\"" + id
+                + "\",\"x\":0,\"y\":64,\"z\":32,\"wearingPumpkin\":false,\"sneaking\":false,\"vanished\":false}]}";
     }
 }

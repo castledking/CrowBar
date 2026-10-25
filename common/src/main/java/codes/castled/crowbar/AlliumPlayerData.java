@@ -28,6 +28,8 @@ public final class AlliumPlayerData {
      * entries stay until the server removes them.
      */
     public final boolean expires;
+    /** Private screenshot markers arrive separately from real player snapshots. */
+    public final boolean fake;
     public final long timestamp;
 
     public AlliumPlayerData(UUID uuid, double x, double y, double z, boolean wearingPumpkin, boolean sneaking, boolean vanished, int teamColor) {
@@ -39,6 +41,10 @@ public final class AlliumPlayerData {
     }
 
     public AlliumPlayerData(UUID uuid, double x, double y, double z, boolean wearingPumpkin, boolean sneaking, boolean vanished, int teamColor, boolean bearingOnly, String name, boolean expires) {
+        this(uuid, x, y, z, wearingPumpkin, sneaking, vanished, teamColor, bearingOnly, name, expires, false);
+    }
+
+    public AlliumPlayerData(UUID uuid, double x, double y, double z, boolean wearingPumpkin, boolean sneaking, boolean vanished, int teamColor, boolean bearingOnly, String name, boolean expires, boolean fake) {
         this.bearingOnly = bearingOnly;
         this.uuid = uuid;
         this.x = x;
@@ -50,6 +56,7 @@ public final class AlliumPlayerData {
         this.teamColor = teamColor;
         this.name = name;
         this.expires = expires;
+        this.fake = fake;
         this.timestamp = System.currentTimeMillis();
     }
 

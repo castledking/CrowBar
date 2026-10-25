@@ -77,16 +77,19 @@ public final class CrowBarPlugin extends JavaPlugin {
     private void startModules() {
         settings = PluginSettings.from(getConfig(), getLogger());
 
+        boolean deferToAllium = settings.locator().deferToAllium() && isPluginEnabled("Allium");
+        boolean sendPlayers = settings.locator().enabled() && !deferToAllium;
         if (settings.locator().enabled()) {
-            if (settings.locator().deferToAllium() && isPluginEnabled("Allium")) {
-                getLogger().info("Allium is sending CrowBar player data, so the player locator stays off. "
-                        + "Set player-locator.defer-to-allium to false to run it anyway.");
-            } else {
-                locator = new PlayerLocatorModule(this, settings, colorStore, fakes);
-                locator.start();
-                getLogger().info("Sending player positions to CrowBar clients every "
-                        + settings.locator().updateIntervalTicks() + " tick(s).");
-            }
+            // Private fake markers remain available when Allium provides real players.
+            locator = new PlayerLocatorModule(this, settings, colorStore, fakes, sendPlayers);
+            locator.start();
+        }
+        if (settings.locator().enabled() && deferToAllium) {
+            getLogger().info("Allium is sending CrowBar player data; CrowBar only sends private fake markers. "
+                    + "Set player-locator.defer-to-allium to false to send real players too.");
+        } else if (sendPlayers) {
+            getLogger().info("Sending player positions to CrowBar clients every "
+                    + settings.locator().updateIntervalTicks() + " tick(s).");
         }
 
         if (settings.claims().enabled() && isPluginEnabled("GriefPrevention")) {
@@ -101,7 +104,7 @@ public final class CrowBarPlugin extends JavaPlugin {
             }
         }
 
-        clientSettings = new ClientSettingsModule(this, settings, colorStore, locator != null);
+        clientSettings = new ClientSettingsModule(this, settings, colorStore, sendPlayers);
         clientSettings.start();
         if (!settings.appearance().settings().isEmpty()) {
             getLogger().info("Choosing client-appearance " + String.join(", ", settings.appearance().configKeys())
@@ -144,7 +147,7 @@ public final class CrowBarPlugin extends JavaPlugin {
         return fakes;
     }
 
-    /** The running player locator, or {@code null} while it is off or Allium handles positions. */
+    /** The running locator; private fake markers work even while Allium handles real players. */
     PlayerLocatorModule locator() {
         return locator;
     }

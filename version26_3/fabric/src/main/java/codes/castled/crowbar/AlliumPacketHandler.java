@@ -5,18 +5,12 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
-import java.util.Map;
-import java.util.UUID;
-
 public final class AlliumPacketHandler {
     public static final Identifier CHANNEL_ID = Identifier.fromNamespaceAndPath("crowbar", "player_data");
 
     public static void handleJson(String json) {
-        Map<UUID, AlliumPlayerData> snapshot = PlayerDataJson.parse(json);
-        if (snapshot == null) return;
+        if (!PlayerDataJson.applySnapshot(json, CrowBarState.alliumPlayerData)) return;
         CrowBarState.markAlliumDataReceived();
-        CrowBarState.alliumPlayerData.clear();
-        CrowBarState.alliumPlayerData.putAll(snapshot);
     }
 
     public static class PlayerDataPayload implements CustomPacketPayload {

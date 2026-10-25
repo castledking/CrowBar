@@ -99,6 +99,57 @@ public final class CrowBarHudRenderer {
     }
 
     /**
+     * Whether CrowBar has anything to put in the locator bar's slot this frame: its own players or
+     * claims, or vanilla waypoints it redraws.
+     */
+    public static boolean hasLocatorContent() {
+        if (CrowBarState.viewSelfEnabled) return false;
+        if (CrowBarState.isExternalRenderSuppressed()) return false;
+        if (CrowBarState.isXpBarVisible()) return false;
+
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null) return false;
+        boolean hasSelectedClaims = !CrowBarState.getClaimWaypoints().isEmpty();
+        if (!LocatorBarVisibility.hasRenderSource(
+                CrowBarState.hasAlliumDataReceived(),
+                CrowBarState.isIntegratedServer,
+                false,
+                hasSelectedClaims)) return false;
+
+        Entity cameraEntity = client.getCameraEntity();
+        if (cameraEntity == null) return false;
+        boolean crowBarOwnsVanillaBar = CrowBarState.shouldCancelVanillaLocatorBar();
+        boolean hasRenderablePlayers = CrowBarState.shouldRenderPlayers()
+                && CrowBarState.hasRenderablePlayers(client.player.getUUID());
+        return LocatorBarVisibility.shouldRenderCrowBar(
+                CrowBarState.isXpBarVisible(),
+                hasRenderablePlayers,
+                hasSelectedClaims,
+                crowBarOwnsVanillaBar,
+                crowBarOwnsVanillaBar && hasNonClaimVanillaWaypoints(client, cameraEntity));
+    }
+
+    /**
+     * Whether vanilla's locator bar would come out blank. Vanilla picks the locator bar whenever the
+     * server has sent any waypoint, but once CrowBar has taken the bar over it may hide every one of
+     * them (claim markers, or players the server's locator leaves out) and then draw nothing itself,
+     * which left the slot with neither markers nor the experience bar.
+     */
+    public static boolean shouldSkipLocatorBar() {
+        return !CrowBarState.viewSelfEnabled
+                && !CrowBarState.isExternalRenderSuppressed()
+                && CrowBarState.shouldCancelVanillaLocatorBar()
+                && !hasLocatorContent();
+    }
+
+    /** The bar vanilla shows when there are no waypoints, named as in its bar type enum. */
+    public static String locatorBarFallback() {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player != null && client.player.jumpableVehicle() != null) return "JUMPABLE_VEHICLE";
+        return client.gameMode != null && client.gameMode.hasExperience() ? "EXPERIENCE" : "EMPTY";
+    }
+
+    /**
      * Draws CrowBar's replacement bar background.
      *
      * <p>Separate from the markers because the two belong on opposite sides of the experience
@@ -106,31 +157,7 @@ public final class CrowBarHudRenderer {
      * the markers must go over vanilla's own dots, which are extracted after it.
      */
     public static void renderLocatorBarBackground(GuiGraphicsExtractor context, DeltaTracker tickCounter) {
-        if (CrowBarState.viewSelfEnabled) return;
-        if (CrowBarState.isExternalRenderSuppressed()) return;
-        if (CrowBarState.isXpBarVisible()) return;
-
-        Minecraft client = Minecraft.getInstance();
-        if (client.player == null || client.level == null) return;
-        boolean hasSelectedClaims = !CrowBarState.getClaimWaypoints().isEmpty();
-        if (!LocatorBarVisibility.hasRenderSource(
-                CrowBarState.hasAlliumDataReceived(),
-                CrowBarState.isIntegratedServer,
-                false,
-                hasSelectedClaims)) return;
-
-        Entity cameraEntity = client.getCameraEntity();
-        if (cameraEntity == null) return;
-        boolean crowBarOwnsVanillaBar = CrowBarState.shouldCancelVanillaLocatorBar();
-        boolean hasRenderablePlayers = CrowBarState.shouldRenderPlayers()
-                && CrowBarState.hasRenderablePlayers(client.player.getUUID());
-        boolean hasBarContent = LocatorBarVisibility.shouldRenderCrowBar(
-                CrowBarState.isXpBarVisible(),
-                hasRenderablePlayers,
-                hasSelectedClaims,
-                crowBarOwnsVanillaBar,
-                crowBarOwnsVanillaBar && hasNonClaimVanillaWaypoints(client, cameraEntity));
-        if (!hasBarContent) return;
+        if (!hasLocatorContent()) return;
 
         int barX = (context.guiWidth() - 182) / 2;
         int locatorBarY = context.guiHeight() - 29;

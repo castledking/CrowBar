@@ -58,7 +58,7 @@ public final class PlayerLocatorPlusData {
         }
 
         if (update.fullReset()) {
-            players.clear();
+            players.values().removeIf(player -> !player.fake);
         }
         for (UUID removed : update.removals()) {
             players.remove(removed);

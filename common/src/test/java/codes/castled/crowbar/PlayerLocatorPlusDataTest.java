@@ -123,6 +123,18 @@ class PlayerLocatorPlusDataTest {
     }
 
     @Test
+    void fullResetPreservesPrivateFakeMarkers() throws IOException {
+        Map<UUID, AlliumPlayerData> players = new HashMap<>();
+        players.put(ALEX, new AlliumPlayerData(ALEX, 0, 64, 10, false, false, false,
+                0xFFFFFF, false, "Alex", true, true));
+        PlayerLocatorPlusData.apply(packet(List.of(new Loc(STEVE, 1f, 0f, 0f, 10f, 0)),
+                List.of(), true), 0, 0, 0, players);
+        assertEquals(2, players.size());
+        assertTrue(players.get(ALEX).fake);
+        assertFalse(players.get(STEVE).fake);
+    }
+
+    @Test
     void malformedPacketsChangeNothing() throws IOException {
         Map<UUID, AlliumPlayerData> players = new HashMap<>();
         PlayerLocatorPlusData.apply(packet(List.of(new Loc(ALEX, 1f, 0f, 0f, 10f, 0)), List.of(), false), 0, 0, 0, players);

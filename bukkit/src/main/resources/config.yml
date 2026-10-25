@@ -10,6 +10,7 @@ player-locator:
   enabled: true
   # Allium Essentials sends the same data. While Allium is installed, let it do that instead of
   # sending everything twice.
+  # /crowbar fake still works while deferring to Allium (clients need CrowBar 2.0.1 or newer).
   defer-to-allium: true
   # Ticks between updates. 1 is the smoothest; higher values use less bandwidth.
   update-interval-ticks: 2

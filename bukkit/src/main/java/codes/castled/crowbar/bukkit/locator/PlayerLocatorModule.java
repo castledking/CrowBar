@@ -19,7 +19,9 @@ import org.bukkit.plugin.Plugin;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Sends CrowBar clients where the other players in their world are.
@@ -38,14 +40,17 @@ public final class PlayerLocatorModule implements Listener {
     private final HidingRules hiding;
     private final PlayerColors colors;
     private final FakeMarkers fakes;
+    private final boolean sendPlayers;
+    private final Set<UUID> fakeRecipients = ConcurrentHashMap.newKeySet();
     private Scheduler.Task task;
 
-    public PlayerLocatorModule(Plugin plugin, PluginSettings settings, PlayerColorStore colorStore, FakeMarkers fakes) {
+    public PlayerLocatorModule(Plugin plugin, PluginSettings settings, PlayerColorStore colorStore, FakeMarkers fakes, boolean sendPlayers) {
         this.plugin = plugin;
         this.settings = settings;
         this.hiding = new HidingRules(settings.hiding());
         this.colors = new PlayerColors(settings.colors(), colorStore);
         this.fakes = fakes;
+        this.sendPlayers = sendPlayers;
     }
 
     public void start() {
@@ -59,12 +64,21 @@ public final class PlayerLocatorModule implements Listener {
             task.cancel();
             task = null;
         }
+        // Remove private markers immediately on disable/reload, without clearing Allium's players.
+        for (UUID id : fakeRecipients) {
+            Player viewer = Bukkit.getPlayer(id);
+            if (viewer != null && viewer.isOnline() && isListening(viewer)) {
+                sendSnapshot(viewer, new JsonArray(), true);
+            }
+        }
+        fakeRecipients.clear();
         HandlerList.unregisterAll(this);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
         fakes.clear(event.getPlayer().getUniqueId());
+        fakeRecipients.remove(event.getPlayer().getUniqueId());
         // Send right away rather than waiting for the next update, so the dot disappears with them.
         broadcast(event.getPlayer().getUniqueId());
     }
@@ -109,27 +123,34 @@ public final class PlayerLocatorModule implements Listener {
         if (viewer == null || !viewer.isOnline()) return;
         // Only clients with CrowBar listen on the channel; everyone else would discard the payload.
         if (!isListening(viewer)) return;
-        if (!viewer.hasPermission(RECEIVE_PERMISSION)) return;
+        if (!viewer.hasPermission(RECEIVE_PERMISSION)) {
+            if (fakeRecipients.remove(viewer.getUniqueId())) sendSnapshot(viewer, new JsonArray(), true);
+            return;
+        }
 
         Location origin = viewer.getLocation();
         double maxDistance = settings.locator().maxDistance();
-        JsonArray players = new JsonArray();
-        for (Player target : Bukkit.getOnlinePlayers()) {
-            if (target.equals(viewer) || target.getUniqueId().equals(leaving)) continue;
-            if (!target.getWorld().equals(viewer.getWorld())) continue;
-            if (hiding.hides(viewer, target)) continue;
+        if (sendPlayers) {
+            JsonArray players = new JsonArray();
+            for (Player target : Bukkit.getOnlinePlayers()) {
+                if (target.equals(viewer) || target.getUniqueId().equals(leaving)) continue;
+                if (!target.getWorld().equals(viewer.getWorld())) continue;
+                if (hiding.hides(viewer, target)) continue;
 
-            Location at = target.getLocation();
-            if (maxDistance > 0 && at.distanceSquared(origin) > maxDistance * maxDistance) continue;
+                Location at = target.getLocation();
+                if (maxDistance > 0 && at.distanceSquared(origin) > maxDistance * maxDistance) continue;
 
-            JsonObject entry = entry(origin, target.getUniqueId(), at.getX(), at.getY(), at.getZ(), colors.colorFor(viewer, target));
-            // CrowBar requires these three fields. Anyone they would apply to is already filtered
-            // out above, so they only ever describe a viewer allowed to see through them.
-            entry.addProperty("wearingPumpkin", hiding.isDisguised(target));
-            entry.addProperty("sneaking", target.isSneaking());
-            players.add(entry);
+                JsonObject entry = entry(origin, target.getUniqueId(), at.getX(), at.getY(), at.getZ(), colors.colorFor(viewer, target));
+                // CrowBar requires these three fields. Anyone they would apply to is already filtered
+                // out above, so they only ever describe a viewer allowed to see through them.
+                entry.addProperty("wearingPumpkin", hiding.isDisguised(target));
+                entry.addProperty("sneaking", target.isSneaking());
+                players.add(entry);
+            }
+            sendSnapshot(viewer, players, false);
         }
 
+        JsonArray players = new JsonArray();
         UUID world = viewer.getWorld().getUID();
         for (FakeMarkers.Marker fake : fakes.get(viewer.getUniqueId())) {
             if (!fake.world().equals(world)) continue;
@@ -143,7 +164,19 @@ public final class PlayerLocatorModule implements Listener {
             players.add(entry);
         }
 
+        // No fake traffic for normal players, including on servers that defer to Allium. An empty
+        // snapshot is still needed once after clearing or moving outside the configured range.
+        if (!players.isEmpty()) {
+            fakeRecipients.add(viewer.getUniqueId());
+            sendSnapshot(viewer, players, true);
+        } else if (fakeRecipients.remove(viewer.getUniqueId())) {
+            sendSnapshot(viewer, players, true);
+        }
+    }
+
+    private void sendSnapshot(Player viewer, JsonArray players, boolean fake) {
         JsonObject root = new JsonObject();
+        if (fake) root.addProperty("fakePlayers", true);
         root.add("players", players);
         try {
             viewer.sendPluginMessage(plugin, CHANNEL, root.toString().getBytes(StandardCharsets.UTF_8));

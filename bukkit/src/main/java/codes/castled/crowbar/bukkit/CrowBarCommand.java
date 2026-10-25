@@ -153,11 +153,15 @@ final class CrowBarCommand implements TabExecutor {
             return true;
         }
         if (locator == null) {
-            sender.sendMessage(ChatColor.RED + "The player locator is not running here (it is off, or Allium sends positions instead), so there is nothing to add fake players to.");
+            sender.sendMessage(ChatColor.RED + "CrowBar's player locator is disabled. Enable player-locator.enabled to use fake markers.");
             return true;
         }
         if (!PlayerLocatorModule.isListening(player)) {
             sender.sendMessage(ChatColor.RED + "Fake players only show on CrowBar's bar, and your client is not running CrowBar.");
+            return true;
+        }
+        if (!player.hasPermission(PlayerLocatorModule.RECEIVE_PERMISSION)) {
+            sender.sendMessage(ChatColor.RED + "You do not have permission to receive CrowBar locator markers.");
             return true;
         }
 

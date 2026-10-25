@@ -60,6 +60,8 @@ The plugin is optional, and players without CrowBar are unaffected by it. It has
 
 If Allium or GPExpansion is installed, the matching part steps aside so nothing is sent twice. GPExpansion's claim markers add custom names, colors, claim spawns and published claims; this plugin names claims after their owner and anchors them at their center.
 
+**Private fake players.** Operators can use `/crowbar fake [1-50]` for screenshot markers and `/crowbar fake clear` to remove them. They are visible only to you and disappear when you leave the world or disconnect. Fake markers also work alongside Allium with `player-locator.defer-to-allium: true`, as long as `player-locator.enabled` stays `true`; that needs CrowBar 2.0.1 or newer on both the server and your client.
+
 | Permission | Default | |
 | --- | --- | --- |
 | `crowbar.locator` | everyone | Receive other players' positions. |
@@ -68,6 +70,7 @@ If Allium or GPExpansion is installed, the matching part steps aside so nothing 
 | `crowbar.color` / `crowbar.color.others` | everyone / op | `/crowbar color <#RRGGBB\|reset> [player]` |
 | `crowbar.claims` | everyone | `/crowbar claims <own\|trusted\|off>`: which claims show on your vanilla bar. |
 | `crowbar.claims.admin` | op | See admin claims when `claim-waypoints.admin-claims` is on. |
+| `crowbar.fake` | op | Add or clear private fake player markers. Also needs `crowbar.locator`. |
 | `crowbar.reload` | op | `/crowbar reload` |
 
 The plugin runs on any server from Minecraft 1.21 to 26.3 regardless of which CrowBar jar carries it. Vanilla claim markers need Paper on 1.21.6 or newer; elsewhere only CrowBar players see claims.
