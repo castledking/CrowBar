@@ -5,6 +5,13 @@ plugins {
 group = rootProject.maven_group
 version = rootProject.mod_version
 
+// Also declared in settings.gradle, but any project-level repository, such as mavenLocal() added by
+// a user's init script, makes Gradle ignore the settings repositories for this project.
+repositories {
+    maven { url = "https://libraries.minecraft.net/" }
+    mavenCentral()
+}
+
 dependencies {
     compileOnly "com.mojang:authlib:7.0.63"
     // Both ship with every supported Minecraft client, so they are compile-only here and
