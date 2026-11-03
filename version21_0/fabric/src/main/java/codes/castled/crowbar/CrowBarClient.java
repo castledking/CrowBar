@@ -131,25 +131,12 @@ public final class CrowBarClient implements ClientModInitializer {
             }
             while (toggleClaimWaypoints.wasPressed()) {
                 if (shouldSkipKeybind(toggleClaimWaypoints)) continue;
-                if (!CrowBarState.hasClaimDataReceived()) {
-                    showClaimsLoading(client);
-                    continue;
+                // A server that picks the claim mode (GPExpansion, for /claim bar) is told about the switch.
+                switch (ClaimWaypoints.pressKey()) {
+                    case LOADING -> showClaimsLoading(client);
+                    case NO_CLAIMS -> showNoClaimsFound(client);
+                    case CHANGED -> showMessage(client, ClaimWaypoints.modeMessage());
                 }
-                if (!CrowBarState.hasAnyClaimWaypoints()) {
-                    showNoClaimsFound(client);
-                    continue;
-                }
-                CrowBarState.ClaimWaypointMode mode = CrowBarState.cycleClaimWaypointMode();
-                if (mode != CrowBarState.ClaimWaypointMode.OFF
-                        && !CrowBarState.hasSelectedClaimWaypoints()) {
-                    showNoClaimsFound(client);
-                    continue;
-                }
-                showMessage(client, "Claim waypoints: " + switch (mode) {
-                    case OFF -> "off";
-                    case OWNED -> "owned";
-                    case TRUSTED -> "owned + trusted";
-                });
             }
         });
 

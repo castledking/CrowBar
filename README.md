@@ -91,6 +91,8 @@ Without Allium, CrowBar falls back to normal client-visible players, including L
 
 When [GPExpansion](https://github.com/castledking/GPExpansion) is installed on the server, claim waypoints display the claim name and a bowtie marker on the locator bar to the claim owner and trusted players. CrowBar reads the same locator data and renders the name tag above the waypoint, giving you readable claim labels right on the locator bar.
 
+The claim waypoint key and GPExpansion's `/claim bar` change the same setting. Each press of `Z` moves to the next of `/claim bar`'s modes (owned, owned + trusted, owned + trusted + published, off), takes effect immediately, and is saved on the server; setting a mode with `/claim bar` moves the key along with it. Older CrowBar or GPExpansion versions, and servers without GPExpansion, keep the key's own cycle of off, owned and owned + trusted.
+
 ![GPX-CrowBar](https://castled.codes/assets/gpx-crowbar.png)
 
 ## Requirements
@@ -126,7 +128,7 @@ Default keybinds:
 
 - `N`: Toggle locator name tags
 - `B`: Toggle locator skins
-- `Z`: Toggle claim waypoints
+- `Z`: Cycle claim waypoints (on GPExpansion servers, the same modes as `/claim bar`)
 - `X`: Show distance
 - `\`: Open CrowBar settings
 - View self: unbound

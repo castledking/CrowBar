@@ -11,12 +11,15 @@ import net.minecraft.util.Identifier;
 import java.nio.charset.StandardCharsets;
 
 /**
- * The channels beyond Allium's: server settings and dot colours shared with the CrowBar plugin, and
- * Player Locator Plus's positions. Each carries raw bytes that the common module reads and writes.
+ * The channels beyond Allium's: server settings and dot colours shared with the CrowBar plugin, the
+ * claim mode shared with GPExpansion, and Player Locator Plus's positions. Each carries raw bytes
+ * that the common module reads and writes.
  */
 final class CrowBarNetwork {
     static final CustomPayload.Id<RawPayload> SERVER_SETTINGS = id("crowbar", "server_settings");
     static final CustomPayload.Id<RawPayload> PLAYER_COLOR = id("crowbar", "player_color");
+    static final CustomPayload.Id<RawPayload> CLAIM_MODE =
+            id(ClaimWaypoints.MODE_CHANNEL_NAMESPACE, ClaimWaypoints.MODE_CHANNEL_PATH);
     static final CustomPayload.Id<RawPayload> PLAYER_LOCATOR_PLUS =
             id(PlayerLocatorPlusData.NAMESPACE, PlayerLocatorPlusData.PATH);
 
@@ -39,6 +42,19 @@ final class CrowBarNetwork {
         ServerConnection.setColorSender(data -> {
             if (!ClientPlayNetworking.canSend(PLAYER_COLOR)) return false;
             ClientPlayNetworking.send(new RawPayload(PLAYER_COLOR, data));
+            return true;
+        });
+
+        // Both ways: the server says which claim mode is active, and the claim key asks it to change.
+        // Registering the receiver announces the channel, which is how GPExpansion learns that this
+        // client can follow its mode.
+        PayloadTypeRegistry.playS2C().register(CLAIM_MODE, codec(CLAIM_MODE));
+        PayloadTypeRegistry.playC2S().register(CLAIM_MODE, codec(CLAIM_MODE));
+        ClientPlayNetworking.registerGlobalReceiver(CLAIM_MODE, (payload, context) ->
+                ClaimWaypoints.onServerMode(new String(payload.data(), StandardCharsets.UTF_8)));
+        ClaimWaypoints.setModeSender(data -> {
+            if (!ClientPlayNetworking.canSend(CLAIM_MODE)) return false;
+            ClientPlayNetworking.send(new RawPayload(CLAIM_MODE, data));
             return true;
         });
 

@@ -17,15 +17,6 @@ public final class CrowBarState {
     public static final Map<UUID, AlliumPlayerData> alliumPlayerData = new ConcurrentHashMap<>();
     public static boolean alliumDataReceived = false;
 
-    /** Claims this player may see, from GPExpansion. Empty without the server plugin. */
-    private static volatile java.util.List<ClaimWaypointData> claimWaypoints = java.util.List.of();
-
-    /** Which claims the locator bar shows. Cycled by the claim waypoint keybind. */
-    public enum ClaimWaypointMode { OFF, OWNED, TRUSTED }
-
-    public static volatile ClaimWaypointMode claimWaypointMode = ClaimWaypointMode.TRUSTED;
-    private static volatile boolean claimDataReceived = false;
-
     public static boolean isIntegratedServer = false;
 
     /** Resolves the feature switches for this tick from the config and held feature keys. */
@@ -37,66 +28,39 @@ public final class CrowBarState {
         showDistance = FeatureKeys.isActive(config, CrowBarFeature.SHOW_DISTANCE);
     }
 
-    /** True once GPExpansion has sent anything, which is how the keybind knows it is useful. */
+    // The claims the server sent, and the claim key's mode, live in the common ClaimWaypoints, so
+    // every loader shares one copy of the mode handling GPExpansion talks to. Marker ids there only
+    // matter from 1.21.6 on, where they suppress the duplicate vanilla waypoint.
+
+    /** True once the server has sent claim data, which is how the claim key knows it is useful. */
     public static boolean hasClaimDataReceived() {
-        return claimDataReceived;
+        return ClaimWaypoints.hasDataReceived();
     }
 
     public static boolean hasAnyClaimWaypoints() {
-        return !claimWaypoints.isEmpty();
+        return ClaimWaypoints.hasAny();
     }
 
-    /** True only when the selected GPExpansion mode has claims to replace player mode with. */
+    /** True only when the current claim mode has claims to replace player markers with. */
     public static boolean isClaimWaypointModeActive() {
-        return LocatorBarVisibility.isClaimWaypointModeActive(
-                claimDataReceived,
-                claimWaypointMode != ClaimWaypointMode.OFF,
-                hasSelectedClaimWaypoints());
+        return ClaimWaypoints.isModeActive();
     }
 
     public static boolean shouldRenderPlayers() {
         return LocatorBarVisibility.shouldRenderPlayers(isClaimWaypointModeActive());
     }
 
-    /** Advances OFF to OWNED to TRUSTED and back to OFF. */
-    public static ClaimWaypointMode cycleClaimWaypointMode() {
-        claimWaypointMode = switch (claimWaypointMode) {
-            case OFF -> ClaimWaypointMode.OWNED;
-            case OWNED -> ClaimWaypointMode.TRUSTED;
-            case TRUSTED -> ClaimWaypointMode.OFF;
-        };
-        return claimWaypointMode;
-    }
-
-    /**
-     * Stores the claims GPExpansion published. Marker entity ids only matter from 1.21.6 on, where
-     * they suppress the duplicate vanilla waypoint; older versions have no waypoints to suppress.
-     */
-    public static void setClaimWaypoints(java.util.List<ClaimWaypointData> claims, java.util.Set<UUID> markerIds) {
-        claimDataReceived = true;
-        claimWaypoints = java.util.List.copyOf(claims);
-    }
-
-    /** Claims to draw, already filtered by the current mode. */
+    /** Claims to draw, already narrowed to the current mode. */
     public static java.util.List<ClaimWaypointData> getClaimWaypoints() {
-        return switch (claimWaypointMode) {
-            case OFF -> java.util.List.of();
-            case OWNED -> claimWaypoints.stream().filter(ClaimWaypointData::owned).toList();
-            case TRUSTED -> claimWaypoints;
-        };
+        return ClaimWaypoints.selected();
     }
 
     public static boolean hasSelectedClaimWaypoints() {
-        return switch (claimWaypointMode) {
-            case OFF -> false;
-            case OWNED -> claimWaypoints.stream().anyMatch(ClaimWaypointData::owned);
-            case TRUSTED -> !claimWaypoints.isEmpty();
-        };
+        return ClaimWaypoints.hasSelected();
     }
 
     public static void clearClaimWaypoints() {
-        claimWaypoints = java.util.List.of();
-        claimDataReceived = false;
+        ClaimWaypoints.reset();
     }
 
     public static void setExternalRenderSuppressed(String owner, boolean suppressed, boolean keepVanillaLocatorBar) {
