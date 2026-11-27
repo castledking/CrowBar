@@ -9,7 +9,7 @@ version="${mod_version}"
 displayName="CrowBar"
 authors="castledking"
 description='''Client locator bar name tags, skin markers, and self-view rendering.'''
-logoFile="assets/crowbar/icon.png"
+iconFile="assets/crowbar/icon.png"
 displayTest="IGNORE_SERVER_VERSION"
 
 [[mixins]]

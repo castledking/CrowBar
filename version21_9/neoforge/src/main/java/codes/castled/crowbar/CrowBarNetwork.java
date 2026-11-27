@@ -4,7 +4,6 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
@@ -43,11 +42,13 @@ final class CrowBarNetwork {
         // Both ways: the server says which claim mode is active, and the claim key asks it to change.
         // NeoForge announces the channel to Bukkit servers, which is how GPExpansion learns that this
         // client can follow its mode. The integrated server never sends it and ignores what it gets.
-        registrar.playBidirectional(CLAIM_MODE, codec(CLAIM_MODE), (payload, context) -> {
-            if (context.flow() == PacketFlow.CLIENTBOUND) {
-                ClaimWaypoints.onServerMode(new String(payload.data(), StandardCharsets.UTF_8));
-            }
-        });
+        registrar.playBidirectional(
+                CLAIM_MODE,
+                codec(CLAIM_MODE),
+                (payload, context) -> {
+                },
+                (payload, context) ->
+                        ClaimWaypoints.onServerMode(new String(payload.data(), StandardCharsets.UTF_8)));
 
         // A port of Player Locator Plus would register this channel itself, and a channel can only be
         // registered once.
