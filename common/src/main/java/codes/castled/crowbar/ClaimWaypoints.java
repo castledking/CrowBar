@@ -48,7 +48,7 @@ public final class ClaimWaypoints {
     /** GPExpansion's mode that adds published claims. */
     public static final String BOTH = "both";
 
-    /** The key's cycle when this client picks: from the default, owned + trusted, to off, then owned. */
+    /** The key's cycle when this client picks: from off to owned, then owned + trusted, then back to off. */
     private static final List<String> LOCAL_MODES = List.of(OWN, TRUSTED, OFF);
     /** How long a request may go unconfirmed before the server's word counts again. */
     static final long REQUEST_TIMEOUT_MILLIS = 3_000;
@@ -85,10 +85,10 @@ public final class ClaimWaypoints {
     private static volatile boolean dataReceived;
 
     /**
-     * This client's own pick, used where the server does not pick. Kept across servers.
-     * Package-private so tests can start from the default.
+     * This client's own pick, used where the server does not pick. Kept across servers and relaunch.
+     * Starts at {@link #OFF} until toggled. Package-private so tests can start from the default.
      */
-    static volatile String localMode = TRUSTED;
+    static volatile String localMode = OFF;
     /** The server's modes in key order, or null while this client picks. */
     private static volatile List<String> serverModes;
     private static volatile String serverMode;
@@ -97,6 +97,26 @@ public final class ClaimWaypoints {
     private static long sentAt;
 
     private ClaimWaypoints() {
+    }
+
+    public static boolean isValidMode(String mode) {
+        return OFF.equals(mode) || OWN.equals(mode) || TRUSTED.equals(mode) || BOTH.equals(mode)
+                || (mode != null && !mode.isBlank() && mode.length() <= 32);
+    }
+
+    public static void loadConfig(String mode) {
+        if (isValidMode(mode)) {
+            localMode = mode;
+        }
+    }
+
+    static void setLocalMode(String mode) {
+        localMode = mode;
+        CrowBarConfig config = CrowBarConfigStore.config();
+        if (config != null) {
+            config.claimMode = mode;
+            CrowBarConfigStore.save();
+        }
     }
 
     public static void setModeSender(ModeSender sender) {
@@ -128,14 +148,32 @@ public final class ClaimWaypoints {
             serverModes = null;
             serverMode = null;
         } else {
+            boolean initial = serverModes == null;
             serverModes = message.modes();
-            // While a newer request is on its way, its confirmation brings the mode; taking this
-            // older one would flick the bar back for a moment. A server that never answers, or lost
-            // count in a reload, is believed again once the request times out.
-            boolean caughtUp = message.ack() >= sentSeq
-                    || clock.getAsLong() - sentAt >= REQUEST_TIMEOUT_MILLIS;
-            if (caughtUp || serverMode == null || !message.modes().contains(serverMode)) {
-                serverMode = message.mode();
+            if (initial) {
+                // When joining a server that manages claim modes (e.g. GPExpansion), keep the
+                // player's chosen mode across servers and relaunches instead of resetting to the
+                // server's default (which is usually "both").
+                if (message.modes().contains(localMode)) {
+                    serverMode = localMode;
+                    if (!localMode.equals(message.mode())) {
+                        request(localMode);
+                    }
+                } else {
+                    serverMode = message.mode();
+                }
+            } else {
+                // While a newer request is on its way, its confirmation brings the mode; taking this
+                // older one would flick the bar back for a moment. A server that never answers, or lost
+                // count in a reload, is believed again once the request times out.
+                boolean caughtUp = message.ack() >= sentSeq
+                        || clock.getAsLong() - sentAt >= REQUEST_TIMEOUT_MILLIS;
+                if (caughtUp || serverMode == null || !message.modes().contains(serverMode)) {
+                    serverMode = message.mode();
+                    if (caughtUp) {
+                        setLocalMode(message.mode());
+                    }
+                }
             }
         }
         refresh();
@@ -164,9 +202,8 @@ public final class ClaimWaypoints {
         if (serverModes != null) {
             serverMode = next;
             request(next);
-        } else {
-            localMode = next;
         }
+        setLocalMode(next);
         refresh();
         return KeyResult.CHANGED;
     }

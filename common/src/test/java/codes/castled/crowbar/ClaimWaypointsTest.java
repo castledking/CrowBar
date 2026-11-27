@@ -38,7 +38,8 @@ class ClaimWaypointsTest {
     @BeforeEach
     void setUp() {
         ClaimWaypoints.reset();
-        ClaimWaypoints.localMode = ClaimWaypoints.TRUSTED;
+        ClaimWaypoints.localMode = ClaimWaypoints.OFF;
+        CrowBarConfigStore.config().claimMode = ClaimWaypoints.OFF;
         ClaimWaypoints.clock = () -> now;
         ClaimWaypoints.setModeSender(payload -> sent.add(new String(payload, StandardCharsets.UTF_8)));
     }
@@ -46,7 +47,8 @@ class ClaimWaypointsTest {
     @AfterEach
     void tearDown() {
         ClaimWaypoints.reset();
-        ClaimWaypoints.localMode = ClaimWaypoints.TRUSTED;
+        ClaimWaypoints.localMode = ClaimWaypoints.OFF;
+        CrowBarConfigStore.config().claimMode = ClaimWaypoints.OFF;
         ClaimWaypoints.clock = System::currentTimeMillis;
         ClaimWaypoints.setModeSender(payload -> false);
     }
@@ -69,6 +71,7 @@ class ClaimWaypointsTest {
 
     @Test
     void theKeyCyclesTheServersModesAndShowsWhatEachOneLists() {
+        ClaimWaypoints.localMode = ClaimWaypoints.OWN;
         serverMode("own", 0);
         ClaimWaypoints.onClaimData(GPX_CLAIMS);
         assertEquals(Set.of("1"), shown());
@@ -94,6 +97,7 @@ class ClaimWaypointsTest {
 
     @Test
     void aCommandOnTheServerMovesTheKeyToo() {
+        ClaimWaypoints.localMode = ClaimWaypoints.BOTH;
         serverMode("both", 0);
         ClaimWaypoints.onClaimData(GPX_CLAIMS);
 
@@ -155,24 +159,26 @@ class ClaimWaypointsTest {
         ClaimWaypoints.onServerMode("{\"modes\":[]}");
 
         assertFalse(ClaimWaypoints.isServerManaged());
-        assertEquals("trusted", ClaimWaypoints.mode());
+        assertEquals("off", ClaimWaypoints.mode());
         ClaimWaypoints.pressKey();
+        assertEquals("own", ClaimWaypoints.mode());
         assertTrue(sent.isEmpty(), "a client-picked mode is never sent");
     }
 
     @Test
     void withoutServerModesTheKeyCyclesLocallyAsBefore() {
         ClaimWaypoints.onClaimData(PLAIN_CLAIMS);
-        assertEquals(Set.of("1", "2"), shown(), "owned + trusted shows everything sent");
+        assertEquals(Set.of(), shown(), "off draws nothing until toggled");
 
         assertEquals(ClaimWaypoints.KeyResult.CHANGED, ClaimWaypoints.pressKey());
-        assertEquals("off", ClaimWaypoints.mode());
-        assertEquals(Set.of(), shown());
-        ClaimWaypoints.pressKey();
         assertEquals("own", ClaimWaypoints.mode());
         assertEquals(Set.of("1"), shown());
         ClaimWaypoints.pressKey();
         assertEquals("trusted", ClaimWaypoints.mode());
+        assertEquals(Set.of("1", "2"), shown());
+        ClaimWaypoints.pressKey();
+        assertEquals("off", ClaimWaypoints.mode());
+        assertEquals(Set.of(), shown());
 
         assertTrue(sent.isEmpty());
     }
@@ -181,7 +187,9 @@ class ClaimWaypointsTest {
     void resetForgetsTheServerButKeepsTheLocalPick() {
         ClaimWaypoints.onClaimData(PLAIN_CLAIMS);
         ClaimWaypoints.pressKey();
-        ClaimWaypoints.pressKey();
+        assertEquals("own", ClaimWaypoints.mode());
+
+        ClaimWaypoints.localMode = ClaimWaypoints.BOTH;
         serverMode("both", 0);
         assertEquals("both", ClaimWaypoints.mode());
 
@@ -189,7 +197,7 @@ class ClaimWaypointsTest {
 
         assertFalse(ClaimWaypoints.isServerManaged());
         assertFalse(ClaimWaypoints.hasDataReceived());
-        assertEquals("own", ClaimWaypoints.mode());
+        assertEquals("both", ClaimWaypoints.mode());
         assertEquals(ClaimWaypoints.KeyResult.LOADING, ClaimWaypoints.pressKey());
     }
 
@@ -236,6 +244,7 @@ class ClaimWaypointsTest {
 
     @Test
     void malformedPayloadsChangeNothing() {
+        ClaimWaypoints.localMode = ClaimWaypoints.OWN;
         serverMode("own", 0);
         ClaimWaypoints.onClaimData(GPX_CLAIMS);
 
@@ -262,6 +271,68 @@ class ClaimWaypointsTest {
         assertEquals(0xFFFF0000, claim.color());
         assertNull(claim.markerId());
         assertTrue(claim.modes().isEmpty());
+    }
+
+    @Test
+    void serverDefaultBothDoesNotOverrideSavedOff() {
+        ClaimWaypoints.localMode = ClaimWaypoints.OFF;
+        serverMode("both", 0);
+        ClaimWaypoints.onClaimData(GPX_CLAIMS);
+
+        assertEquals("off", ClaimWaypoints.mode());
+        assertEquals(Set.of(), shown());
+        assertFalse(ClaimWaypoints.isModeActive());
+        assertEquals(List.of("{\"mode\":\"off\",\"seq\":1}"), sent);
+    }
+
+    @Test
+    void serverDefaultBothDoesNotOverrideSavedMode() {
+        ClaimWaypoints.localMode = ClaimWaypoints.OWN;
+        serverMode("both", 0);
+        ClaimWaypoints.onClaimData(GPX_CLAIMS);
+
+        assertEquals("own", ClaimWaypoints.mode());
+        assertEquals(Set.of("1"), shown());
+        assertTrue(ClaimWaypoints.isModeActive());
+        assertEquals(List.of("{\"mode\":\"own\",\"seq\":1}"), sent);
+    }
+
+    @Test
+    void keyPressSavesModeToConfig() {
+        CrowBarConfig config = CrowBarConfigStore.config();
+        assertEquals(ClaimWaypoints.OFF, config.claimMode);
+
+        ClaimWaypoints.onClaimData(PLAIN_CLAIMS);
+        assertEquals(ClaimWaypoints.KeyResult.CHANGED, ClaimWaypoints.pressKey());
+
+        assertEquals(ClaimWaypoints.OWN, config.claimMode);
+        assertEquals(ClaimWaypoints.OWN, ClaimWaypoints.localMode);
+        assertEquals("own", ClaimWaypoints.mode());
+    }
+
+    @Test
+    void modePersistsAcrossServers() {
+        // Toggle locally to own.
+        ClaimWaypoints.onClaimData(PLAIN_CLAIMS);
+        ClaimWaypoints.pressKey();
+        assertEquals("own", ClaimWaypoints.mode());
+
+        // Connect to server 1 which resets to its default "both".
+        serverMode("both", 0);
+        ClaimWaypoints.onClaimData(GPX_CLAIMS);
+        // CrowBar overrides back to own and tells the server.
+        assertEquals("own", ClaimWaypoints.mode());
+        assertEquals(List.of("{\"mode\":\"own\",\"seq\":1}"), sent);
+
+        // Disconnect and connect to server 2 which also sends "both".
+        ClaimWaypoints.reset();
+        sent.clear();
+        serverMode("both", 0);
+        ClaimWaypoints.onClaimData(GPX_CLAIMS);
+
+        // Setting still persisted across servers!
+        assertEquals("own", ClaimWaypoints.mode());
+        assertEquals(List.of("{\"mode\":\"own\",\"seq\":1}"), sent);
     }
 
     private void serverMode(String mode, int ack) {

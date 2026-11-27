@@ -32,6 +32,7 @@ public final class CrowBarConfigStore {
     public static void init(Path configDir) {
         file = configDir.resolve(FILE_NAME);
         config = read(file);
+        ClaimWaypoints.loadConfig(config.claimMode);
         invalidate();
         // Rewrite straight away so options added in a newer release show up in the file.
         write(file, config);

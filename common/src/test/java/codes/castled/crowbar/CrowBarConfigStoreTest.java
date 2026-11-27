@@ -26,6 +26,7 @@ class CrowBarConfigStoreTest {
         assertTrue(config.dimUnfocusedLabels);
         assertEquals(DotColorMode.TEAM, config.dotColorMode);
         assertEquals(KeyMode.TOGGLE, config.nameTagsKey);
+        assertEquals(ClaimWaypoints.OFF, config.claimMode);
     }
 
     @Test
@@ -38,6 +39,7 @@ class CrowBarConfigStoreTest {
         config.dotColorMode = DotColorMode.CUSTOM;
         config.customDotColor = "#FF5555";
         config.selfDotColor = "#55FFFF";
+        config.claimMode = ClaimWaypoints.OWN;
 
         CrowBarConfigStore.write(file, config);
         CrowBarConfig loaded = CrowBarConfigStore.read(file);
@@ -48,6 +50,7 @@ class CrowBarConfigStoreTest {
         assertEquals(DotColorMode.CUSTOM, loaded.dotColorMode);
         assertEquals("#FF5555", loaded.customDotColor);
         assertEquals("#55FFFF", loaded.selfDotColor);
+        assertEquals(ClaimWaypoints.OWN, loaded.claimMode);
     }
 
     @Test
@@ -73,7 +76,8 @@ class CrowBarConfigStoreTest {
                   "selfDotColor": "#12",
                   "fadeStart": 500,
                   "fadeEnd": 100,
-                  "fadeEndOpacity": 4.0
+                  "fadeEndOpacity": 4.0,
+                  "claimMode": ""
                 }
                 """);
 
@@ -85,6 +89,7 @@ class CrowBarConfigStoreTest {
         assertEquals(CrowBarConfig.AUTO_COLOR, config.selfDotColor);
         assertTrue(config.fadeEnd > config.fadeStart);
         assertEquals(0.3f, config.fadeEndOpacity);
+        assertEquals(ClaimWaypoints.OFF, config.claimMode);
     }
 
     @Test
@@ -96,5 +101,22 @@ class CrowBarConfigStoreTest {
 
         assertTrue(config.nameTags);
         assertTrue(Files.exists(dir.resolve("crowbar.json.broken")));
+    }
+
+    @Test
+    void initLoadsClaimModeIntoClaimWaypoints() throws Exception {
+        Path file = dir.resolve("crowbar.json");
+        Files.writeString(file, """
+                {
+                  "claimMode": "trusted"
+                }
+                """);
+
+        try {
+            CrowBarConfigStore.init(dir);
+            assertEquals("trusted", ClaimWaypoints.localMode);
+        } finally {
+            ClaimWaypoints.localMode = ClaimWaypoints.OFF;
+        }
     }
 }

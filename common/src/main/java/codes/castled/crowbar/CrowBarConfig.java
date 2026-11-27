@@ -25,6 +25,9 @@ public final class CrowBarConfig {
     public KeyMode showDistanceKey = KeyMode.TOGGLE;
     public KeyMode viewSelfKey = KeyMode.TOGGLE;
 
+    /** Which claims the locator bar shows: off, own, trusted, both. */
+    public String claimMode = ClaimWaypoints.OFF;
+
     // Appearance.
     /** Draws a translucent black plate behind each label. */
     public boolean labelBackground = false;
@@ -83,5 +86,6 @@ public final class CrowBarConfig {
         if (fadeStart < 0) fadeStart = 0;
         if (fadeEnd <= fadeStart) fadeEnd = fadeStart + 1;
         if (!(fadeEndOpacity >= 0f && fadeEndOpacity <= 1f)) fadeEndOpacity = defaults.fadeEndOpacity;
+        if (claimMode == null || !ClaimWaypoints.isValidMode(claimMode)) claimMode = defaults.claimMode;
     }
 }

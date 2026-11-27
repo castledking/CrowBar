@@ -1,4 +1,4 @@
-[![CrowBar](https://castled.codes/assets/crowbar-banner.png)](https://github.com/castledking/CrowBar)
+[![CrowBar](https://repository-images.githubusercontent.com/1249648986/542059ea-789c-4ee7-a7b5-349840df05ee)](https://github.com/castledking/CrowBar)
 
 <p align="center">
   <a href="https://discord.com/invite/pCKdCX6nYr"><img alt="Discord" src="https://img.shields.io/badge/Discord-Community-5865F2?style=for-the-badge&logo=discord&logoColor=white"></a>
